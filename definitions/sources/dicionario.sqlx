@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "basedosdados",
+  schema: "br_inep_avaliacao_alfabetizacao",
+  name: "dicionario",
+  description: "Dicionário da avaliação de alfabetização do INEP (Base dos Dados)",
+}

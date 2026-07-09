@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "basedosdados",
+  schema: "br_bd_diretorios_brasil",
+  name: "uf",
+  description: "Tabela de diretório de UFs do Brasil (Base dos Dados)",
+}

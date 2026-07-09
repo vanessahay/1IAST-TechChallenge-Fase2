@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "basedosdados",
+  schema: "br_inep_avaliacao_alfabetizacao",
+  name: "uf",
+  description: "Tabela de avaliação de alfabetização por UF do INEP (Base dos Dados)",
+}
