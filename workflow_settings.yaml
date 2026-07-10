@@ -2,3 +2,4 @@ defaultProject: vanehay
 defaultLocation: US
 defaultDataset: 1IAST_Fase2
 defaultAssertionDataset: 1IAST_Fase2_assertions
+dataformCoreVersion: 3.0.0
