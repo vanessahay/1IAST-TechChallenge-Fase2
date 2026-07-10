@@ -13,10 +13,11 @@ config {
   columns: {
     ano: "Ano de referência do indicador socioeconômico (coluna de partição por RANGE_BUCKET)",
     id_municipio: "Código IBGE padronizado de 7 dígitos preenchido com zero à esquerda",
-    nome_municipio: "Nome do Município padronizado em formato INITCAP",
-    indice_vulnerabilidade_social: "Índice numérico consolidado de Vulnerabilidade Social (IVS) do município",
-    idhm: "Índice de Desenvolvimento Humano Municipal (IDHM) consolidado",
-    renda_per_capita: "Renda per capita média registrada na base do ministério",
+    nome_territorio: "Nome do território ou município padronizado em formato INITCAP",
+    sigla_uf: "Sigla da Unidade da Federação em maiúsculas",
+    qtd_familias_extrema_pobreza: "Quantidade de famílias cadastradas em situação de extrema pobreza (RFPC <= R$ 140/70)",
+    qtd_familias_baixa_renda: "Quantidade de famílias cadastradas em situação de baixa renda (RFPC até meio salário)",
+    qtd_familias_acima_meio_salario: "Quantidade de famílias cadastradas acima de meio salário mínimo",
     taxa_alfabetizacao_municipal: "Enriquecimento socioeducacional: Taxa atual de alfabetização no município (oriunda de silver_alfabetizacao_municipio)"
   }
 }
@@ -24,19 +25,21 @@ config {
 /**
  * Pipeline da Camada Prata - Normalização e Enriquecimento de Vulnerabilidade Social.
  * Otimizações e limpezas aplicadas (segundo @skill:dataform-bigquery e @skill:data-autocleaning):
- *  - Normalização estrita de chaves territoriais com LPAD(TRIM(...), 7, '0').
- *  - Conversão de vírgula decimal brasileira em ponto com REPLACE e tipagem segura com SAFE_CAST.
+ *  - Normalização estrita de chaves territoriais com LPAD(TRIM(codigo_ibge), 7, '0').
+ *  - Tipagem numérica segura para todas as métricas de famílias cadastradas.
  *  - Cruzamento analítico com a tabela de alfabetização municipal da Camada Prata.
  */
 SELECT
-  COALESCE(SAFE_CAST(vs.ano AS INT64), 2024) AS ano,
+  2024 AS ano,
   LPAD(TRIM(vs.codigo_ibge), 7, '0') AS id_municipio,
-  INITCAP(TRIM(vs.nome_municipio)) AS nome_municipio,
-  SAFE_CAST(REPLACE(vs.ivs, ',', '.') AS FLOAT64) AS indice_vulnerabilidade_social,
-  SAFE_CAST(REPLACE(vs.idhm, ',', '.') AS FLOAT64) AS idhm,
-  SAFE_CAST(REPLACE(vs.renda_per_capita, ',', '.') AS FLOAT64) AS renda_per_capita,
+  INITCAP(TRIM(vs.nome_territorio)) AS nome_territorio,
+  UPPER(TRIM(vs.sigla_uf)) AS sigla_uf,
+  SAFE_CAST(vs.qtd_familias_extrema_pobreza AS FLOAT64) AS qtd_familias_extrema_pobreza,
+  SAFE_CAST(vs.qtd_familias_baixa_renda AS FLOAT64) AS qtd_familias_baixa_renda,
+  SAFE_CAST(vs.qtd_familias_acima_meio_salario AS FLOAT64) AS qtd_familias_acima_meio_salario,
   SAFE_CAST(alf.taxa_alfabetizacao_atual AS FLOAT64) AS taxa_alfabetizacao_municipal
 FROM ${ref("bronze_vulnerabilidade_social")} AS vs
 LEFT JOIN ${ref("silver_alfabetizacao_municipio")} AS alf
   ON LPAD(TRIM(vs.codigo_ibge), 7, '0') = alf.id_municipio
 WHERE vs.codigo_ibge IS NOT NULL
+  AND vs.codigo_ibge != '0'
