@@ -1,0 +1,14 @@
+config {
+  type: "operations",
+  hasOutput: true,
+  schema: "1IAST_Fase2",
+  name: "run_notebook_ingestao_vulnerabilidade_social",
+  description: "Nó do Dataform representando a execução do Notebook Python Jupyter de ingestão (notebooks/ingestao_vulnerabilidade_social.ipynb) dentro do pipeline. No fluxo de orquestração externa (Cloud Composer), a tarefa taskIngestaoVulnerabilidadeSocialNotebook aciona o notebook que acessa o portal VIS/SAGI e materializa a tabela bronze_vulnerabilidade_social antes que as transformações ELT iniciem."
+}
+
+-- Este nó de operações documenta e integra visualmente no grafo do Dataform a chamada ao Notebook Python de ingestão.
+-- O Notebook notebooks/ingestao_vulnerabilidade_social.ipynb materializa a fonte bronze_vulnerabilidade_social no BigQuery:
+SELECT
+  'notebooks/ingestao_vulnerabilidade_social.ipynb' AS path_notebook,
+  'vanehay.1IAST_Fase2.bronze_vulnerabilidade_social' AS tabela_bronze_gerada,
+  'Execução orquestrada pelo Cloud Composer antes do acionamento do Dataform' AS status_orquestracao

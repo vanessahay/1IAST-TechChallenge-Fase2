@@ -6,6 +6,10 @@ config {
   bigquery: {
     partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
   },
+  assertions: {
+    uniqueKey: ["ano", "sigla_uf", "serie", "rede"],
+    nonNull: ["ano", "sigla_uf"]
+  },
   columns: {
     ano: "Ano de referência da avaliação escolar (coluna de partição por RANGE_BUCKET)",
     sigla_uf: "Sigla normalizada da Unidade da Federação em maiúsculas (ex: SP, RJ)",

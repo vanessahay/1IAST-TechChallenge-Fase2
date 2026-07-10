@@ -6,6 +6,10 @@ config {
   bigquery: {
     partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
   },
+  assertions: {
+    uniqueKey: ["ano", "id_municipio", "rede"],
+    nonNull: ["ano", "id_municipio", "status_atingimento_meta"]
+  },
   columns: {
     ano: "Ano de referência do indicador escolar (coluna de partição por RANGE_BUCKET)",
     id_municipio: "Código IBGE padronizado de 7 dígitos do Município",

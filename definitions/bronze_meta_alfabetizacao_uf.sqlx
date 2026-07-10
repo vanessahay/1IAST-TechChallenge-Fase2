@@ -6,6 +6,9 @@ config {
   bigquery: {
     partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
   },
+  assertions: {
+    nonNull: ["ano", "sigla_uf", "publish_time"]
+  },
   columns: {
     ano: "Ano de referência da meta ou taxa (coluna de partição por RANGE_BUCKET)",
     sigla_uf: "Sigla da Unidade da Federação (ex: SP, RJ)",

@@ -6,6 +6,10 @@ config {
   bigquery: {
     partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
   },
+  assertions: {
+    uniqueKey: ["ano", "esfera_geografica", "codigo_territorial", "rede"],
+    nonNull: ["ano", "esfera_geografica", "codigo_territorial"]
+  },
   columns: {
     ano: "Ano de referência da medição escolar (coluna de partição por RANGE_BUCKET)",
     esfera_geografica: "Nível territorial da série temporal (Nacional, Estadual, Municipal)",

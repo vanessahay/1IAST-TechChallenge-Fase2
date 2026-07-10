@@ -6,6 +6,9 @@ config {
   bigquery: {
     partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
   },
+  assertions: {
+    nonNull: ["ano", "rede", "publish_time"]
+  },
   columns: {
     ano: "Ano de referência da meta ou taxa (coluna de partição por RANGE_BUCKET)",
     rede: "Rede de ensino avaliada (ex: Total, Pública, Privada)",

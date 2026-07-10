@@ -6,6 +6,10 @@ config {
   bigquery: {
     partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
   },
+  assertions: {
+    uniqueKey: ["ano", "rede"],
+    nonNull: ["ano", "rede"]
+  },
   columns: {
     ano: "Ano de referência da avaliação (coluna de partição por RANGE_BUCKET)",
     rede: "Rede de ensino padronizada (ex: Total, Pública, Privada)",
