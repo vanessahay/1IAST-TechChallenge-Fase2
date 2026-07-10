@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "basedosdados",
+  schema: "br_inep_avaliacao_alfabetizacao",
+  name: "alunos",
+  description: "Tabela com dados granulares de avaliação por aluno do INEP (Base dos Dados)",
+}

@@ -1,0 +1,97 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "bronze_alunos",
+  description: "Tabela camada bronze com dados individuais e granulares por Aluno avaliado (INEP/Base dos Dados), enriquecidos com nomes do município (IBGE) e descrições de série, rede, presença, preenchimento do caderno e status de alfabetização. Particionada por ano escolar (RANGE_BUCKET). Esta tabela consolida o nível mais detalhado de proficiência e peso amostral do aluno, cruzando todas as chaves com os dicionários oficiais.",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de aplicação da avaliação no aluno (coluna de partição por RANGE_BUCKET)",
+    id_municipio: "Código identificador de 7 dígitos do Município onde situa-se a escola (IBGE)",
+    id_municipio_nome: "Nome por extenso do Município",
+    id_escola: "Código identificador único da Escola (INEP)",
+    id_aluno: "Código identificador anonimizado do Aluno avaliado",
+    caderno: "Tipo ou código do caderno de prova aplicado ao aluno",
+    serie: "Ano ou série escolar frequentada pelo aluno",
+    rede: "Rede de ensino à qual pertence a escola do aluno",
+    presenca: "Status de presença do aluno no dia da aplicação da avaliação",
+    preenchimento_caderno: "Status de preenchimento ou regularidade do caderno de prova",
+    alfabetizado: "Classificação indicando se o aluno foi considerado alfabetizado",
+    proficiencia: "Nota ou score de proficiência alcançado pelo aluno na avaliação",
+    peso_aluno: "Peso amostral estatístico atribuído ao aluno para expansão de estimativas"
+  }
+}
+
+/**
+ * Pipeline de transformação e enriquecimento dos dados no nível granular de Aluno.
+ * Otimizações aplicadas (segundo @skill:developing-with-bigquery):
+ *  - Common Subexpression Reuse: CTE dicionario_alunos unifica a leitura de 5 chaves ('serie', 'rede', 'presenca', 'preenchimento_caderno', 'alfabetizado').
+ *  - Predicate Pushdown: Filtros de id_tabela = 'alunos' aplicados diretamente na extração inicial.
+ * Limpezas aplicadas (segundo @skill:data-autocleaning):
+ *  - TRIM em todos os identificadores dimensionais para evitar quebras em JOINs múltiplos.
+ *  - SAFE_CAST nas métricas contínuas de proficiência e peso amostral.
+ */
+WITH dicionario_alunos AS (
+  SELECT
+    nome_coluna,
+    TRIM(chave) AS chave,
+    TRIM(valor) AS valor
+  FROM ${ref("br_inep_avaliacao_alfabetizacao", "dicionario")}
+  WHERE id_tabela = 'alunos'
+    AND nome_coluna IN ('serie', 'rede', 'presenca', 'preenchimento_caderno', 'alfabetizado')
+),
+dicionario_serie AS (
+  SELECT chave AS chave_serie, valor AS descricao_serie
+  FROM dicionario_alunos WHERE nome_coluna = 'serie'
+),
+dicionario_rede AS (
+  SELECT chave AS chave_rede, valor AS descricao_rede
+  FROM dicionario_alunos WHERE nome_coluna = 'rede'
+),
+dicionario_presenca AS (
+  SELECT chave AS chave_presenca, valor AS descricao_presenca
+  FROM dicionario_alunos WHERE nome_coluna = 'presenca'
+),
+dicionario_preenchimento_caderno AS (
+  SELECT chave AS chave_preenchimento_caderno, valor AS descricao_preenchimento_caderno
+  FROM dicionario_alunos WHERE nome_coluna = 'preenchimento_caderno'
+),
+dicionario_alfabetizado AS (
+  SELECT chave AS chave_alfabetizado, valor AS descricao_alfabetizado
+  FROM dicionario_alunos WHERE nome_coluna = 'alfabetizado'
+),
+diretorio_id_municipio AS (
+  SELECT DISTINCT
+    TRIM(id_municipio) AS id_municipio,
+    TRIM(nome) AS nome
+  FROM ${ref("br_bd_diretorios_brasil", "municipio")}
+  WHERE id_municipio IS NOT NULL
+)
+SELECT
+  SAFE_CAST(dados.ano AS INT64) AS ano,
+  TRIM(dados.id_municipio) AS id_municipio,
+  diretorio_id_municipio.nome AS id_municipio_nome,
+  TRIM(dados.id_escola) AS id_escola,
+  TRIM(dados.id_aluno) AS id_aluno,
+  TRIM(dados.caderno) AS caderno,
+  dicionario_serie.descricao_serie AS serie,
+  dicionario_rede.descricao_rede AS rede,
+  dicionario_presenca.descricao_presenca AS presenca,
+  dicionario_preenchimento_caderno.descricao_preenchimento_caderno AS preenchimento_caderno,
+  dicionario_alfabetizado.descricao_alfabetizado AS alfabetizado,
+  SAFE_CAST(dados.proficiencia AS FLOAT64) AS proficiencia,
+  SAFE_CAST(dados.peso_aluno AS FLOAT64) AS peso_aluno
+FROM ${ref("br_inep_avaliacao_alfabetizacao", "alunos")} AS dados
+LEFT JOIN diretorio_id_municipio
+  ON TRIM(dados.id_municipio) = diretorio_id_municipio.id_municipio
+LEFT JOIN dicionario_serie
+  ON TRIM(dados.serie) = dicionario_serie.chave_serie
+LEFT JOIN dicionario_rede
+  ON TRIM(dados.rede) = dicionario_rede.chave_rede
+LEFT JOIN dicionario_presenca
+  ON TRIM(dados.presenca) = dicionario_presenca.chave_presenca
+LEFT JOIN dicionario_preenchimento_caderno
+  ON TRIM(dados.preenchimento_caderno) = dicionario_preenchimento_caderno.chave_preenchimento_caderno
+LEFT JOIN dicionario_alfabetizado
+  ON TRIM(dados.alfabetizado) = dicionario_alfabetizado.chave_alfabetizado
