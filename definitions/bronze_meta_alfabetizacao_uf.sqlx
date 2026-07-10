@@ -1,0 +1,55 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "bronze_meta_alfabetizacao_uf",
+  description: "Tabela camada bronze com metas e taxas de alfabetização do INEP por Unidade da Federação (2024 a 2030), enriquecida com os nomes extensos dos estados. Particionada por ano escolar (RANGE_BUCKET). Esta tabela consolida as metas anuais e taxas de alfabetização estaduais, cruzando a sigla da UF com o diretório oficial da Base dos Dados para padronização e análises regionais.",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de referência da avaliação (coluna de partição por RANGE_BUCKET)",
+    sigla_uf: "Sigla da Unidade da Federação (ex: SP, RJ)",
+    sigla_uf_nome: "Nome por extenso da Unidade da Federação",
+    rede: "Rede de ensino avaliada (ex: Total, Pública, Privada)",
+    taxa_alfabetizacao: "Percentual dos alunos avaliados na UF considerados alfabetizados",
+    meta_alfabetizacao_2024: "Meta de alfabetização na UF para o ano de 2024",
+    meta_alfabetizacao_2025: "Meta de alfabetização na UF para o ano de 2025",
+    meta_alfabetizacao_2026: "Meta de alfabetização na UF para o ano de 2026",
+    meta_alfabetizacao_2027: "Meta de alfabetização na UF para o ano de 2027",
+    meta_alfabetizacao_2028: "Meta de alfabetização na UF para o ano de 2028",
+    meta_alfabetizacao_2029: "Meta de alfabetização na UF para o ano de 2029",
+    meta_alfabetizacao_2030: "Meta de alfabetização na UF para o ano de 2030",
+    percentual_participacao: "Percentual de participação dos alunos na avaliação estadual"
+  }
+}
+
+/**
+ * Pipeline de transformação e carga das metas de alfabetização por UF.
+ * Otimizações e limpezas aplicadas (segundo @skill:data-autocleaning e @skill:developing-with-bigquery):
+ *  - CTE diretorio_sigla_uf encapsula a busca de estados com TRIM e remoção de nulos.
+ *  - TRIM e SAFE_CAST em todas as colunas dimensionais e métricas contínuas.
+ */
+WITH diretorio_sigla_uf AS (
+  SELECT DISTINCT
+    TRIM(sigla) AS sigla,
+    TRIM(nome) AS nome
+  FROM ${ref("br_bd_diretorios_brasil", "uf")}
+  WHERE sigla IS NOT NULL
+)
+SELECT
+  SAFE_CAST(dados.ano AS INT64) AS ano,
+  TRIM(dados.sigla_uf) AS sigla_uf,
+  diretorio_sigla_uf.nome AS sigla_uf_nome,
+  TRIM(dados.rede) AS rede,
+  SAFE_CAST(dados.taxa_alfabetizacao AS FLOAT64) AS taxa_alfabetizacao,
+  SAFE_CAST(dados.meta_alfabetizacao_2024 AS FLOAT64) AS meta_alfabetizacao_2024,
+  SAFE_CAST(dados.meta_alfabetizacao_2025 AS FLOAT64) AS meta_alfabetizacao_2025,
+  SAFE_CAST(dados.meta_alfabetizacao_2026 AS FLOAT64) AS meta_alfabetizacao_2026,
+  SAFE_CAST(dados.meta_alfabetizacao_2027 AS FLOAT64) AS meta_alfabetizacao_2027,
+  SAFE_CAST(dados.meta_alfabetizacao_2028 AS FLOAT64) AS meta_alfabetizacao_2028,
+  SAFE_CAST(dados.meta_alfabetizacao_2029 AS FLOAT64) AS meta_alfabetizacao_2029,
+  SAFE_CAST(dados.meta_alfabetizacao_2030 AS FLOAT64) AS meta_alfabetizacao_2030,
+  SAFE_CAST(dados.percentual_participacao AS FLOAT64) AS percentual_participacao
+FROM ${ref("br_inep_avaliacao_alfabetizacao", "meta_alfabetizacao_uf")} AS dados
+LEFT JOIN diretorio_sigla_uf
+  ON TRIM(dados.sigla_uf) = diretorio_sigla_uf.sigla
