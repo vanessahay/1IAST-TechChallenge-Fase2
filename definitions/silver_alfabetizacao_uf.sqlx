@@ -1,0 +1,55 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "silver_alfabetizacao_uf",
+  description: "Tabela camada Prata (Silver) integrando dados históricos de avaliação estadual (bronze_uf) com as metas evolutivas (bronze_meta_alfabetizacao_uf). Particionada por ano escolar (RANGE_BUCKET).",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de referência da avaliação escolar (coluna de partição por RANGE_BUCKET)",
+    sigla_uf: "Sigla normalizada da Unidade da Federação em maiúsculas (ex: SP, RJ)",
+    sigla_uf_nome: "Nome por extenso padronizado da Unidade da Federação",
+    serie: "Ano ou série escolar avaliada (ou Total)",
+    rede: "Rede de ensino padronizada (ex: Pública, Privada, Total)",
+    taxa_alfabetizacao_atual: "Percentual de alunos alfabetizados na UF (oriundo da avaliação histórica ou metas)",
+    media_portugues: "Média ponderada na disciplina de Língua Portuguesa equalizada com o SAEB",
+    meta_alfabetizacao_2024: "Meta de alfabetização definida para a UF no ano de 2024",
+    meta_alfabetizacao_2026: "Meta de alfabetização definida para a UF no ano de 2026",
+    meta_alfabetizacao_2030: "Meta de alfabetização definida para a UF no ano de 2030",
+    desvio_meta_2024: "Desvio em pontos percentuais entre a taxa de alfabetização atual e a meta de 2024",
+    proporcao_aluno_nivel_0: "Proporção de alunos alocados no nível de desempenho 0",
+    proporcao_aluno_nivel_4: "Proporção de alunos alocados no nível de desempenho 4",
+    proporcao_aluno_nivel_8: "Proporção de alunos alocados no nível de desempenho 8"
+  }
+}
+
+/**
+ * Pipeline da Camada Prata - Integração e Normalização Estadual (UF).
+ * Otimizações e limpezas aplicadas (segundo @skill:dataform-bigquery e @skill:data-autocleaning):
+ *  - Normalização de chaves com UPPER e TRIM para join perfeito entre bases históricas e de metas.
+ *  - COALESCE em nomes e redes para eliminar nulos e padronizar categorias.
+ */
+SELECT
+  COALESCE(SAFE_CAST(b_uf.ano AS INT64), SAFE_CAST(b_meta.ano AS INT64)) AS ano,
+  UPPER(TRIM(COALESCE(b_uf.sigla_uf, b_meta.sigla_uf))) AS sigla_uf,
+  COALESCE(TRIM(b_uf.sigla_uf_nome), TRIM(b_meta.sigla_uf_nome), 'Estado Não Identificado') AS sigla_uf_nome,
+  COALESCE(TRIM(b_uf.serie), 'Total / Consolidação Estadual') AS serie,
+  COALESCE(INITCAP(TRIM(COALESCE(b_uf.rede, b_meta.rede))), 'Total') AS rede,
+  COALESCE(SAFE_CAST(b_uf.taxa_alfabetizacao AS FLOAT64), SAFE_CAST(b_meta.taxa_alfabetizacao AS FLOAT64)) AS taxa_alfabetizacao_atual,
+  SAFE_CAST(b_uf.media_portugues AS FLOAT64) AS media_portugues,
+  SAFE_CAST(b_meta.meta_alfabetizacao_2024 AS FLOAT64) AS meta_alfabetizacao_2024,
+  SAFE_CAST(b_meta.meta_alfabetizacao_2026 AS FLOAT64) AS meta_alfabetizacao_2026,
+  SAFE_CAST(b_meta.meta_alfabetizacao_2030 AS FLOAT64) AS meta_alfabetizacao_2030,
+  ROUND(
+    COALESCE(SAFE_CAST(b_uf.taxa_alfabetizacao AS FLOAT64), SAFE_CAST(b_meta.taxa_alfabetizacao AS FLOAT64)) - SAFE_CAST(b_meta.meta_alfabetizacao_2024 AS FLOAT64),
+    2
+  ) AS desvio_meta_2024,
+  SAFE_CAST(b_uf.proporcao_aluno_nivel_0 AS FLOAT64) AS proporcao_aluno_nivel_0,
+  SAFE_CAST(b_uf.proporcao_aluno_nivel_4 AS FLOAT64) AS proporcao_aluno_nivel_4,
+  SAFE_CAST(b_uf.proporcao_aluno_nivel_8 AS FLOAT64) AS proporcao_aluno_nivel_8
+FROM ${ref("bronze_uf")} AS b_uf
+FULL OUTER JOIN ${ref("bronze_meta_alfabetizacao_uf")} AS b_meta
+  ON SAFE_CAST(b_uf.ano AS INT64) = SAFE_CAST(b_meta.ano AS INT64)
+  AND UPPER(TRIM(b_uf.sigla_uf)) = UPPER(TRIM(b_meta.sigla_uf))
+  AND INITCAP(TRIM(COALESCE(b_uf.rede, 'Total'))) = INITCAP(TRIM(COALESCE(b_meta.rede, 'Total')))

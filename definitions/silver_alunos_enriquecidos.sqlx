@@ -1,0 +1,55 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "silver_alunos_enriquecidos",
+  description: "Tabela camada Prata (Silver) com registros individuais e granulares de Alunos, limpos, normalizados e enriquecidos com a meta de alfabetização do município da escola. Particionada por ano escolar (RANGE_BUCKET).",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de aplicação da avaliação no aluno (coluna de partição por RANGE_BUCKET)",
+    id_municipio: "Código IBGE normalizado de 7 dígitos do Município da escola",
+    id_municipio_nome: "Nome por extenso padronizado do Município",
+    id_escola: "Código identificador normalizado da Escola",
+    id_aluno: "Código identificador normalizado e anonimizado do Aluno",
+    caderno: "Código do caderno de prova padronizado",
+    serie: "Série escolar frequentada pelo aluno",
+    rede: "Rede de ensino padronizada (ex: Pública, Privada, Municipal)",
+    presenca: "Status padronizado de presença (ex: Presente, Ausente)",
+    preenchimento_caderno: "Status padronizado de preenchimento do caderno de prova",
+    alfabetizado: "Classificação padronizada de alfabetização do aluno (ex: Sim, Não, Não Avaliado)",
+    proficiencia: "Nota de proficiência validada (valores negativos ou inválidos convertidos para NULL)",
+    peso_aluno: "Peso amostral estatístico para expansão da amostra",
+    meta_municipio_2024: "Meta de alfabetização do município do aluno para 2024 (enriquecimento relacional)"
+  }
+}
+
+/**
+ * Pipeline da Camada Prata - Normalização e Enriquecimento de Alunos.
+ * Otimizações e limpezas aplicadas (segundo @skill:dataform-bigquery e @skill:data-autocleaning):
+ *  - Normalização de chaves primárias e estrangeiras (LPAD em id_municipio, TRIM em id_aluno e id_escola).
+ *  - Padronização de status categóricos com COALESCE.
+ *  - Enriquecimento com meta municipal (JOIN relacional).
+ */
+SELECT
+  SAFE_CAST(aluno.ano AS INT64) AS ano,
+  LPAD(TRIM(aluno.id_municipio), 7, '0') AS id_municipio,
+  COALESCE(TRIM(aluno.id_municipio_nome), 'Município Não Identificado') AS id_municipio_nome,
+  TRIM(aluno.id_escola) AS id_escola,
+  TRIM(aluno.id_aluno) AS id_aluno,
+  COALESCE(TRIM(aluno.caderno), 'Caderno Não Especificado') AS caderno,
+  COALESCE(TRIM(aluno.serie), 'Série Não Especificada') AS serie,
+  COALESCE(INITCAP(TRIM(aluno.rede)), 'Rede Não Especificada') AS rede,
+  COALESCE(INITCAP(TRIM(aluno.presenca)), 'Ausente / Sem Registro') AS presenca,
+  COALESCE(INITCAP(TRIM(aluno.preenchimento_caderno)), 'Não Preenchido') AS preenchimento_caderno,
+  COALESCE(INITCAP(TRIM(aluno.alfabetizado)), 'Não Avaliado') AS alfabetizado,
+  CASE
+    WHEN SAFE_CAST(aluno.proficiencia AS FLOAT64) < 0 THEN NULL
+    ELSE SAFE_CAST(aluno.proficiencia AS FLOAT64)
+  END AS proficiencia,
+  SAFE_CAST(aluno.peso_aluno AS FLOAT64) AS peso_aluno,
+  SAFE_CAST(meta.meta_alfabetizacao_2024 AS FLOAT64) AS meta_municipio_2024
+FROM ${ref("bronze_alunos")} AS aluno
+LEFT JOIN ${ref("bronze_meta_alfabetizacao_municipio")} AS meta
+  ON SAFE_CAST(aluno.ano AS INT64) = SAFE_CAST(meta.ano AS INT64)
+  AND LPAD(TRIM(aluno.id_municipio), 7, '0') = LPAD(TRIM(meta.id_municipio), 7, '0')

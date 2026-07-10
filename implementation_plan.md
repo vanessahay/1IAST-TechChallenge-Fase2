@@ -1,36 +1,28 @@
-# Plano de Implementação - Pipeline Dataform: PIPE_1IAST_Fase2 (Camada Bronze Híbrida: Batch + Streaming Incremental)
+# Plano de Implementação - Pipeline Dataform: PIPE_1IAST_Fase2 (Arquitetura Medalhão: Bronze Híbrida + Prata Integrada)
 
 ## Objetivo
-Estabelecer no Google Cloud Dataform no projeto GCP `vanehay` (dataset `1IAST_Fase2`) uma **Camada Bronze Híbrida de Ingestão de Dados (Batch + Streaming Incremental)**:
-- **Bronze Batch (Histórico Consolidado)**: Materialização das três tabelas de avaliação e proficiência do INEP (`bronze_uf`, `bronze_municipio` e `bronze_alunos`), particionadas por `ano` escolar via `RANGE_BUCKET`.
-- **Bronze Streaming Incremental (Atualizações em Tempo Real)**: Processamento contínuo das metas e revisões evolutivas através dos modelos incrementais `bronze_meta_alfabetizacao_brasil`, `bronze_meta_alfabetizacao_uf` e `bronze_meta_alfabetizacao_municipio`, consumindo em tempo real os eventos da tabela de aterrissagem `landing_eventos_indicadores` (alimentada diretamente pelo Cloud Pub/Sub).
+Estabelecer no Google Cloud Dataform no projeto GCP `vanehay` (dataset `1IAST_Fase2`) uma **Arquitetura Medalhão de Nível Corporativo (Bronze Híbrida + Prata Integrada)**:
+- **Camada Bronze Híbrida (Batch + Streaming Incremental)**: 6 tabelas cobrindo todo o ecossistema do INEP (`bronze_uf`, `bronze_municipio` e `bronze_alunos` via carga batch histórica; `bronze_meta_alfabetizacao_brasil`, `bronze_meta_alfabetizacao_uf` e `bronze_meta_alfabetizacao_municipio` via ingestão streaming incremental do Pub/Sub).
+- **Camada Prata Integrada (Silver Layer - Dados Tratados)**: 4 modelos analíticos padronizados (`silver_alfabetizacao_brasil`, `silver_alfabetizacao_uf`, `silver_alfabetizacao_municipio`, `silver_alunos_enriquecidos`) aplicando limpeza estrita, normalização de chaves IBGE em 7 dígitos (`LPAD`), tratamento de ausentes (`COALESCE`), integração cruzada de avaliações com metas e cálculo automatizado do desvio de meta.
 
 ## Premissas (Assumptions)
-1. O repositório Dataform (`PIPE_1IAST_Fase2`) está configurado na região `US` na versão de Core `3.0.61`, compatível 100% com o console GCP.
-2. Centralizar as cargas em lote e as atualizações contínuas de metas diretamente na **Camada Bronze** assegura que a ingestão bruta e limpa fique padronizada na entrada da arquitetura Medalhão.
-3. Os modelos incrementais `bronze_meta_alfabetizacao_*` utilizam a cláusula condicional `when(incremental(), ...)` para varrer apenas novas mensagens filtradas por `publish_time`.
+1. O repositório Dataform (`PIPE_1IAST_Fase2`) roda no Core `3.0.61` em total alinhamento com a nuvem na localização `US`.
+2. Todas as 10 tabelas do pipeline (6 Bronze + 4 Prata) mantêm particionamento harmonioso por `ano` escolar via `RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))`.
+3. A camada Prata atua como a única fonte de verdade corporativa ("Single Source of Truth") pronta para consumo executivo e modelagem Ouro.
 
 ## Arquitetura do Pipeline
-*   **Origens Batch Declaradas**:
-    *   `basedosdados.br_inep_avaliacao_alfabetizacao.dicionario`
-    *   `basedosdados.br_inep_avaliacao_alfabetizacao.uf`
-    *   `basedosdados.br_inep_avaliacao_alfabetizacao.municipio`
-    *   `basedosdados.br_inep_avaliacao_alfabetizacao.alunos`
-    *   `basedosdados.br_bd_diretorios_brasil.uf`
-    *   `basedosdados.br_bd_diretorios_brasil.municipio`
-*   **Origem Streaming Declarada**:
-    *   `vanehay.1IAST_Fase2.landing_eventos_indicadores` (Tabela Landing do Cloud Pub/Sub Direct Subscription)
-*   **Destino Batch Bronze (`type: "table"`)**:
-    *   `vanehay.1IAST_Fase2.bronze_uf`
-    *   `vanehay.1IAST_Fase2.bronze_municipio`
-    *   `vanehay.1IAST_Fase2.bronze_alunos`
-*   **Destino Streaming Bronze Incremental (`type: "incremental"`)**:
-    *   `vanehay.1IAST_Fase2.bronze_meta_alfabetizacao_brasil`
-    *   `vanehay.1IAST_Fase2.bronze_meta_alfabetizacao_uf`
-    *   `vanehay.1IAST_Fase2.bronze_meta_alfabetizacao_municipio`
-*   **Transformações e Limpezas (Autocleaning & Optimization)**:
-    *   **Batch**: CTEs unificadas (`dicionario_*`, `diretorio_*`), `TRIM` em chaves e `SAFE_CAST` em métricas numéricas.
-    *   **Streaming**: Extração de payloads JSON com `JSON_VALUE`, normalização com `TRIM`, `SAFE_CAST` e cruzamento dimensional com os diretórios do IBGE em tempo real.
+*   **Fontes Declaradas**: 6 fontes originais do INEP/IBGE + tabela streaming `landing_eventos_indicadores`.
+*   **Camada Bronze (6 tabelas)**: `bronze_uf`, `bronze_municipio`, `bronze_alunos` (`table`), `bronze_meta_alfabetizacao_brasil`, `bronze_meta_alfabetizacao_uf`, `bronze_meta_alfabetizacao_municipio` (`incremental`).
+*   **Camada Prata (4 tabelas integradas - `type: "table"`)**:
+    *   `vanehay.1IAST_Fase2.silver_alfabetizacao_brasil` (Consolidação nacional e desvio de meta)
+    *   `vanehay.1IAST_Fase2.silver_alfabetizacao_uf` (Integração relacional UF + Metas + Desvio)
+    *   `vanehay.1IAST_Fase2.silver_alfabetizacao_municipio` (Integração Município + Metas IBGE 7 dígitos)
+    *   `vanehay.1IAST_Fase2.silver_alunos_enriquecidos` (Alunos normalizados enriquecidos com meta do município)
+*   **Diretrizes de Tratamento Aplicadas (Silver Layer)**:
+    *   **Normalização de Chaves**: `LPAD(TRIM(id_municipio), 7, '0')` e `UPPER(TRIM(sigla_uf))`.
+    *   **Limpeza de Dados**: `INITCAP(TRIM(rede))` e validações condicionais de notas de proficiência (`CASE WHEN proficiencia < 0 THEN NULL ...`).
+    *   **Valores Ausentes**: `COALESCE(id_municipio_nome, 'Município Não Identificado')`, `COALESCE(presenca, 'Ausente / Sem Registro')`.
+    *   **Integração das Bases**: `FULL OUTER JOIN` entre avaliações históricas e metas evolutivas em streaming.
 
 ## Estratégia de Implementação e Validação
-*   **Sincronização no Console (`dev-workspace`)**: Concluída via `pull_git_commits` com grafo de compilação 100% íntegro e sem erros de versão.
+*   **Sincronização (`dev-workspace`)**: Concluída via `pull_git_commits` com compilação de grafo completa interligando as fontes, as 6 tabelas Bronze e as 4 tabelas Prata.

@@ -1,0 +1,49 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "silver_alfabetizacao_municipio",
+  description: "Tabela camada Prata (Silver) integrando dados municipais de avaliação (bronze_municipio) e metas regionais (bronze_meta_alfabetizacao_municipio). Particionada por ano escolar (RANGE_BUCKET).",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de referência da avaliação ou meta (coluna de partição por RANGE_BUCKET)",
+    id_municipio: "Código IBGE normalizado de 7 dígitos com zeros à esquerda",
+    id_municipio_nome: "Nome por extenso padronizado do Município",
+    serie: "Ano ou série escolar avaliada no município",
+    rede: "Rede de ensino padronizada (ex: Municipal, Pública, Privada, Total)",
+    taxa_alfabetizacao_atual: "Percentual de alunos considerados alfabetizados no município",
+    media_portugues: "Média na disciplina de Língua Portuguesa no município",
+    meta_alfabetizacao_2024: "Meta de alfabetização definida para o município em 2024",
+    meta_alfabetizacao_2030: "Meta de alfabetização definida para o município em 2030",
+    desvio_meta_2024: "Diferença em pontos percentuais entre a taxa atual e a meta de 2024 do município",
+    nivel_alfabetizacao: "Nível numérico ou categórico de alfabetização municipal padronizado"
+  }
+}
+
+/**
+ * Pipeline da Camada Prata - Integração e Normalização Municipal (IBGE).
+ * Otimizações e limpezas aplicadas (segundo @skill:dataform-bigquery e @skill:data-autocleaning):
+ *  - Normalização estrita de chaves IBGE com LPAD para garantir 7 dígitos em todos os registros.
+ *  - COALESCE e INITCAP para padronização e resiliência contra valores nulos nas dimensões.
+ */
+SELECT
+  COALESCE(SAFE_CAST(b_mun.ano AS INT64), SAFE_CAST(b_meta.ano AS INT64)) AS ano,
+  LPAD(TRIM(COALESCE(b_mun.id_municipio, b_meta.id_municipio)), 7, '0') AS id_municipio,
+  COALESCE(TRIM(b_mun.id_municipio_nome), TRIM(b_meta.id_municipio_nome), 'Município Não Identificado') AS id_municipio_nome,
+  COALESCE(TRIM(b_mun.serie), 'Consolidação Municipal') AS serie,
+  COALESCE(INITCAP(TRIM(COALESCE(b_mun.rede, b_meta.rede))), 'Total') AS rede,
+  COALESCE(SAFE_CAST(b_mun.taxa_alfabetizacao AS FLOAT64), SAFE_CAST(b_meta.taxa_alfabetizacao AS FLOAT64)) AS taxa_alfabetizacao_atual,
+  SAFE_CAST(b_mun.media_portugues AS FLOAT64) AS media_portugues,
+  SAFE_CAST(b_meta.meta_alfabetizacao_2024 AS FLOAT64) AS meta_alfabetizacao_2024,
+  SAFE_CAST(b_meta.meta_alfabetizacao_2030 AS FLOAT64) AS meta_alfabetizacao_2030,
+  ROUND(
+    COALESCE(SAFE_CAST(b_mun.taxa_alfabetizacao AS FLOAT64), SAFE_CAST(b_meta.taxa_alfabetizacao AS FLOAT64)) - SAFE_CAST(b_meta.meta_alfabetizacao_2024 AS FLOAT64),
+    2
+  ) AS desvio_meta_2024,
+  SAFE_CAST(b_meta.nivel_alfabetizacao AS INT64) AS nivel_alfabetizacao
+FROM ${ref("bronze_municipio")} AS b_mun
+FULL OUTER JOIN ${ref("bronze_meta_alfabetizacao_municipio")} AS b_meta
+  ON SAFE_CAST(b_mun.ano AS INT64) = SAFE_CAST(b_meta.ano AS INT64)
+  AND LPAD(TRIM(b_mun.id_municipio), 7, '0') = LPAD(TRIM(b_meta.id_municipio), 7, '0')
+  AND INITCAP(TRIM(COALESCE(b_mun.rede, 'Total'))) = INITCAP(TRIM(COALESCE(b_meta.rede, 'Total')))
