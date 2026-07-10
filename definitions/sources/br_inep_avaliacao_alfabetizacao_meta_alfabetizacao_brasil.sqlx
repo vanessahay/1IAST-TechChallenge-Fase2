@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "basedosdados",
+  schema: "br_inep_avaliacao_alfabetizacao",
+  name: "meta_alfabetizacao_brasil",
+  description: "Tabela com metas nacionais de alfabetização (2024-2030) e taxas do Brasil pelo INEP (Base dos Dados)",
+}
