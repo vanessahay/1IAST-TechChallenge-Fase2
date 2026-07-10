@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "basedosdados",
+  schema: "br_bd_diretorios_brasil",
+  name: "municipio",
+  description: "Tabela de diretório de Municípios do Brasil (Base dos Dados)",
+}

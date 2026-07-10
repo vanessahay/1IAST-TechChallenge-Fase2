@@ -1,0 +1,57 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "bronze_meta_alfabetizacao_municipio",
+  description: "Tabela camada bronze com metas, taxas e níveis de alfabetização do INEP por Município (2024 a 2030), enriquecida com os nomes oficiais dos municípios. Particionada por ano escolar (RANGE_BUCKET). Esta tabela consolida os indicadores municipais, cruzando o código IBGE do município com o diretório oficial da Base dos Dados para análises granulares.",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de referência da avaliação (coluna de partição por RANGE_BUCKET)",
+    id_municipio: "Código identificador de 7 dígitos do Município (IBGE)",
+    id_municipio_nome: "Nome por extenso do Município",
+    rede: "Rede de ensino avaliada (ex: Total, Pública, Privada)",
+    taxa_alfabetizacao: "Percentual dos alunos avaliados no município considerados alfabetizados",
+    meta_alfabetizacao_2024: "Meta de alfabetização municipal para o ano de 2024",
+    meta_alfabetizacao_2025: "Meta de alfabetização municipal para o ano de 2025",
+    meta_alfabetizacao_2026: "Meta de alfabetização municipal para o ano de 2026",
+    meta_alfabetizacao_2027: "Meta de alfabetização municipal para o ano de 2027",
+    meta_alfabetizacao_2028: "Meta de alfabetização municipal para o ano de 2028",
+    meta_alfabetizacao_2029: "Meta de alfabetização municipal para o ano de 2029",
+    meta_alfabetizacao_2030: "Meta de alfabetização municipal para o ano de 2030",
+    nivel_alfabetizacao: "Nível numérico categorizado de alfabetização do município",
+    percentual_participacao: "Percentual de participação dos alunos na avaliação municipal"
+  }
+}
+
+/**
+ * Pipeline de transformação e carga das metas de alfabetização por Município.
+ * Otimizações e limpezas aplicadas (segundo @skill:data-autocleaning e @skill:developing-with-bigquery):
+ *  - CTE diretorio_id_municipio encapsula a busca de municípios com TRIM e remoção de chaves nulas.
+ *  - TRIM e SAFE_CAST em todas as colunas dimensionais e métricas contínuas.
+ */
+WITH diretorio_id_municipio AS (
+  SELECT DISTINCT
+    TRIM(id_municipio) AS id_municipio,
+    TRIM(nome) AS nome
+  FROM ${ref("br_bd_diretorios_brasil", "municipio")}
+  WHERE id_municipio IS NOT NULL
+)
+SELECT
+  SAFE_CAST(dados.ano AS INT64) AS ano,
+  TRIM(dados.id_municipio) AS id_municipio,
+  diretorio_id_municipio.nome AS id_municipio_nome,
+  TRIM(dados.rede) AS rede,
+  SAFE_CAST(dados.taxa_alfabetizacao AS FLOAT64) AS taxa_alfabetizacao,
+  SAFE_CAST(dados.meta_alfabetizacao_2024 AS FLOAT64) AS meta_alfabetizacao_2024,
+  SAFE_CAST(dados.meta_alfabetizacao_2025 AS FLOAT64) AS meta_alfabetizacao_2025,
+  SAFE_CAST(dados.meta_alfabetizacao_2026 AS FLOAT64) AS meta_alfabetizacao_2026,
+  SAFE_CAST(dados.meta_alfabetizacao_2027 AS FLOAT64) AS meta_alfabetizacao_2027,
+  SAFE_CAST(dados.meta_alfabetizacao_2028 AS FLOAT64) AS meta_alfabetizacao_2028,
+  SAFE_CAST(dados.meta_alfabetizacao_2029 AS FLOAT64) AS meta_alfabetizacao_2029,
+  SAFE_CAST(dados.meta_alfabetizacao_2030 AS FLOAT64) AS meta_alfabetizacao_2030,
+  SAFE_CAST(dados.nivel_alfabetizacao AS INT64) AS nivel_alfabetizacao,
+  SAFE_CAST(dados.percentual_participacao AS FLOAT64) AS percentual_participacao
+FROM ${ref("br_inep_avaliacao_alfabetizacao", "meta_alfabetizacao_municipio")} AS dados
+LEFT JOIN diretorio_id_municipio
+  ON TRIM(dados.id_municipio) = diretorio_id_municipio.id_municipio
