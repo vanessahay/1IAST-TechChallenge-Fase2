@@ -1,6 +1,6 @@
-# 1IAST - Tech Challenge Fase 2: Pipeline Dataform (Arquitetura Híbrida: Batch + Streaming Incremental)
+# 1IAST - Tech Challenge Fase 2: Pipeline Dataform (Camada Bronze Híbrida: Batch + Streaming Incremental)
 
-Repositório contendo o pipeline de engenharia e transformação de dados no **Google Cloud Dataform** (Projeto: `vanehay`, Dataset: `1IAST_Fase2`, Repositório: `PIPE_1IAST_Fase2`), estruturado para processar em harmonia cargas históricas em lote (Batch) e eventos de atualização contínua em tempo real (Streaming).
+Repositório contendo o pipeline de engenharia e transformação de dados no **Google Cloud Dataform** (Projeto: `vanehay`, Dataset: `1IAST_Fase2`, Repositório: `PIPE_1IAST_Fase2`), onde a **Camada Bronze** consolida em perfeita harmonia cargas históricas em lote (Batch) e atualizações evolutivas em tempo real (Streaming Incremental).
 
 ## 📁 Estrutura do Projeto
 
@@ -9,6 +9,8 @@ Repositório contendo o pipeline de engenharia e transformação de dados no **G
 - `definitions/bronze_uf.sqlx`: Modelo Batch da camada Bronze com indicadores estaduais de alfabetização.
 - `definitions/bronze_municipio.sqlx`: Modelo Batch da camada Bronze com indicadores municipais de alfabetização, séries e redes.
 - `definitions/bronze_alunos.sqlx`: Modelo Batch da camada Bronze granular por Aluno com proficiência e dicionários consolidados.
-- `definitions/silver_atualizacao_medicoes_desempenho.sqlx`: Modelo Incremental da camada Prata para processamento em tempo real de novas medições, atualização de indicadores e revisão de metas via Pub/Sub.
+- `definitions/bronze_meta_alfabetizacao_brasil.sqlx`: Modelo Incremental da camada Bronze alimentado via streaming do Pub/Sub com metas e taxas evolutivas do Brasil.
+- `definitions/bronze_meta_alfabetizacao_uf.sqlx`: Modelo Incremental da camada Bronze alimentado via streaming com metas regionais por UF e cruzamento com o IBGE.
+- `definitions/bronze_meta_alfabetizacao_municipio.sqlx`: Modelo Incremental da camada Bronze alimentado via streaming com metas granulares por Município e IBGE.
 - `walkthrough.md`: Documentação técnica detalhada, evidências de validação e sumários de limpezas/otimizações.
-- `implementation_plan.md`: Plano arquitetural e estratégia de implementação híbrida.
+- `implementation_plan.md`: Plano arquitetural e estratégia de implementação da Camada Bronze Híbrida.

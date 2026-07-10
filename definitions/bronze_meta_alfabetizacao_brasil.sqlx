@@ -1,0 +1,48 @@
+config {
+  type: "incremental",
+  schema: "1IAST_Fase2",
+  name: "bronze_meta_alfabetizacao_brasil",
+  description: "Tabela camada bronze incremental com indicadores e metas de alfabetização no Brasil (2024 a 2030), alimentada em tempo real via streaming do Cloud Pub/Sub (landing_eventos_indicadores). Particionada por ano escolar (RANGE_BUCKET).",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de referência da meta ou taxa (coluna de partição por RANGE_BUCKET)",
+    rede: "Rede de ensino avaliada (ex: Total, Pública, Privada)",
+    taxa_alfabetizacao: "Percentual dos alunos avaliados no país considerados alfabetizados",
+    meta_alfabetizacao_2024: "Meta de alfabetização revisada ou definida para 2024",
+    meta_alfabetizacao_2025: "Meta de alfabetização revisada ou definida para 2025",
+    meta_alfabetizacao_2026: "Meta de alfabetização revisada ou definida para 2026",
+    meta_alfabetizacao_2027: "Meta de alfabetização revisada ou definida para 2027",
+    meta_alfabetizacao_2028: "Meta de alfabetização revisada ou definida para 2028",
+    meta_alfabetizacao_2029: "Meta de alfabetização revisada ou definida para 2029",
+    meta_alfabetizacao_2030: "Meta de alfabetização revisada ou definida para 2030",
+    percentual_participacao: "Percentual de participação nacional na avaliação",
+    publish_time: "Carimbo de data e hora em que o evento de meta foi publicado via streaming",
+    message_id: "Identificador único da mensagem gerado pelo Cloud Pub/Sub para rastreabilidade"
+  }
+}
+
+/**
+ * Pipeline Incremental da Camada Bronze - Metas Nacionais (Brasil).
+ * Otimizações e limpezas aplicadas (segundo @skill:dataform-bigquery e @skill:data-autocleaning):
+ *  - Extração JSON com JSON_VALUE combinada com TRIM e SAFE_CAST para numéricos e inteiros.
+ *  - Cláusula condicional when(incremental(), ...) processando apenas eventos novos por publish_time.
+ */
+SELECT
+  SAFE_CAST(JSON_VALUE(data, '$.ano') AS INT64) AS ano,
+  TRIM(JSON_VALUE(data, '$.rede')) AS rede,
+  SAFE_CAST(JSON_VALUE(data, '$.taxa_alfabetizacao') AS FLOAT64) AS taxa_alfabetizacao,
+  SAFE_CAST(JSON_VALUE(data, '$.meta_alfabetizacao_2024') AS FLOAT64) AS meta_alfabetizacao_2024,
+  SAFE_CAST(JSON_VALUE(data, '$.meta_alfabetizacao_2025') AS FLOAT64) AS meta_alfabetizacao_2025,
+  SAFE_CAST(JSON_VALUE(data, '$.meta_alfabetizacao_2026') AS FLOAT64) AS meta_alfabetizacao_2026,
+  SAFE_CAST(JSON_VALUE(data, '$.meta_alfabetizacao_2027') AS FLOAT64) AS meta_alfabetizacao_2027,
+  SAFE_CAST(JSON_VALUE(data, '$.meta_alfabetizacao_2028') AS FLOAT64) AS meta_alfabetizacao_2028,
+  SAFE_CAST(JSON_VALUE(data, '$.meta_alfabetizacao_2029') AS FLOAT64) AS meta_alfabetizacao_2029,
+  SAFE_CAST(JSON_VALUE(data, '$.meta_alfabetizacao_2030') AS FLOAT64) AS meta_alfabetizacao_2030,
+  SAFE_CAST(JSON_VALUE(data, '$.percentual_participacao') AS FLOAT64) AS percentual_participacao,
+  publish_time,
+  message_id
+FROM ${ref("landing_eventos_indicadores")}
+WHERE JSON_VALUE(data, '$.tipo_evento') IN ('ATUALIZACAO_META_BRASIL', 'ATUALIZACAO_META_NACIONAL')
+${when(incremental(), `AND publish_time > (SELECT MAX(publish_time) FROM ${self()})`)}

@@ -1,0 +1,61 @@
+config {
+  type: "incremental",
+  schema: "1IAST_Fase2",
+  name: "bronze_meta_alfabetizacao_uf",
+  description: "Tabela camada bronze incremental com metas e taxas de alfabetização por UF (2024 a 2030), alimentada em tempo real via streaming do Cloud Pub/Sub e enriquecida com nomes de estados pelo diretório IBGE. Particionada por ano escolar (RANGE_BUCKET).",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de referência da meta ou taxa (coluna de partição por RANGE_BUCKET)",
+    sigla_uf: "Sigla da Unidade da Federação (ex: SP, RJ)",
+    sigla_uf_nome: "Nome por extenso da Unidade da Federação",
+    rede: "Rede de ensino avaliada (ex: Total, Pública, Privada)",
+    taxa_alfabetizacao: "Percentual dos alunos avaliados na UF considerados alfabetizados",
+    meta_alfabetizacao_2024: "Meta de alfabetização revisada ou definida na UF para 2024",
+    meta_alfabetizacao_2025: "Meta de alfabetização revisada ou definida na UF para 2025",
+    meta_alfabetizacao_2026: "Meta de alfabetização revisada ou definida na UF para 2026",
+    meta_alfabetizacao_2027: "Meta de alfabetização revisada ou definida na UF para 2027",
+    meta_alfabetizacao_2028: "Meta de alfabetização revisada ou definida na UF para 2028",
+    meta_alfabetizacao_2029: "Meta de alfabetização revisada ou definida na UF para 2029",
+    meta_alfabetizacao_2030: "Meta de alfabetização revisada ou definida na UF para 2030",
+    percentual_participacao: "Percentual de participação estadual na avaliação",
+    publish_time: "Carimbo de data e hora em que o evento de meta estadual foi publicado",
+    message_id: "Identificador único da mensagem no Cloud Pub/Sub"
+  }
+}
+
+/**
+ * Pipeline Incremental da Camada Bronze - Metas Regionais por UF.
+ * Otimizações e limpezas aplicadas (segundo @skill:dataform-bigquery e @skill:data-autocleaning):
+ *  - CTE diretorio_sigla_uf para reuso de subconsulta limpa com TRIM.
+ *  - JSON_VALUE + SAFE_CAST em todas as propriedades e validação de duplicidade incremental via MAX(publish_time).
+ */
+WITH diretorio_sigla_uf AS (
+  SELECT DISTINCT
+    TRIM(sigla) AS sigla,
+    TRIM(nome) AS nome
+  FROM ${ref("br_bd_diretorios_brasil", "uf")}
+  WHERE sigla IS NOT NULL
+)
+SELECT
+  SAFE_CAST(JSON_VALUE(stream.data, '$.ano') AS INT64) AS ano,
+  TRIM(JSON_VALUE(stream.data, '$.sigla_uf')) AS sigla_uf,
+  diretorio_sigla_uf.nome AS sigla_uf_nome,
+  TRIM(JSON_VALUE(stream.data, '$.rede')) AS rede,
+  SAFE_CAST(JSON_VALUE(stream.data, '$.taxa_alfabetizacao') AS FLOAT64) AS taxa_alfabetizacao,
+  SAFE_CAST(JSON_VALUE(stream.data, '$.meta_alfabetizacao_2024') AS FLOAT64) AS meta_alfabetizacao_2024,
+  SAFE_CAST(JSON_VALUE(stream.data, '$.meta_alfabetizacao_2025') AS FLOAT64) AS meta_alfabetizacao_2025,
+  SAFE_CAST(JSON_VALUE(stream.data, '$.meta_alfabetizacao_2026_revisada') AS FLOAT64) AS meta_alfabetizacao_2026,
+  SAFE_CAST(JSON_VALUE(stream.data, '$.meta_alfabetizacao_2027') AS FLOAT64) AS meta_alfabetizacao_2027,
+  SAFE_CAST(JSON_VALUE(stream.data, '$.meta_alfabetizacao_2028') AS FLOAT64) AS meta_alfabetizacao_2028,
+  SAFE_CAST(JSON_VALUE(stream.data, '$.meta_alfabetizacao_2029') AS FLOAT64) AS meta_alfabetizacao_2029,
+  SAFE_CAST(JSON_VALUE(stream.data, '$.meta_alfabetizacao_2030_revisada') AS FLOAT64) AS meta_alfabetizacao_2030,
+  SAFE_CAST(JSON_VALUE(stream.data, '$.percentual_participacao') AS FLOAT64) AS percentual_participacao,
+  stream.publish_time,
+  stream.message_id
+FROM ${ref("landing_eventos_indicadores")} AS stream
+LEFT JOIN diretorio_sigla_uf
+  ON TRIM(JSON_VALUE(stream.data, '$.sigla_uf')) = diretorio_sigla_uf.sigla
+WHERE JSON_VALUE(stream.data, '$.tipo_evento') IN ('ATUALIZACAO_META_UF', 'ATUALIZACAO_META_ESTADUAL')
+${when(incremental(), `AND stream.publish_time > (SELECT MAX(publish_time) FROM ${self()})`)}
