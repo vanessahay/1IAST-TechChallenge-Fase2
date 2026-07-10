@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "vanehay",
+  schema: "1IAST_Fase2",
+  name: "landing_eventos_indicadores",
+  description: "Tabela de aterrissagem (Landing/Raw) para ingestão contínua em tempo real de eventos do Cloud Pub/Sub",
+}

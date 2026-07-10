@@ -1,7 +1,0 @@
-config {
-  type: "declaration",
-  database: "basedosdados",
-  schema: "br_inep_avaliacao_alfabetizacao",
-  name: "meta_alfabetizacao_municipio",
-  description: "Tabela de metas de alfabetização por Município do INEP (Base dos Dados)",
-}

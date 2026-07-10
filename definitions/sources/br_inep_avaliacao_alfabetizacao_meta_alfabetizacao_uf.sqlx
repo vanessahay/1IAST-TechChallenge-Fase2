@@ -1,7 +1,0 @@
-config {
-  type: "declaration",
-  database: "basedosdados",
-  schema: "br_inep_avaliacao_alfabetizacao",
-  name: "meta_alfabetizacao_uf",
-  description: "Tabela de metas de alfabetização por Unidade da Federação do INEP (Base dos Dados)",
-}
