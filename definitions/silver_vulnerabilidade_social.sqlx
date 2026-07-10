@@ -1,0 +1,38 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "silver_vulnerabilidade_social",
+  description: "Tabela Camada Prata (Silver) com os indicadores de Vulnerabilidade Social normalizados (código IBGE de 7 dígitos) e tipados, cruzados com as avaliações municipais de alfabetização. Particionada por ano (RANGE_BUCKET).",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de referência do indicador socioeconômico (coluna de partição por RANGE_BUCKET)",
+    id_municipio: "Código IBGE padronizado de 7 dígitos preenchido com zero à esquerda",
+    nome_municipio: "Nome do Município padronizado em formato INITCAP",
+    indice_vulnerabilidade_social: "Índice numérico consolidado de Vulnerabilidade Social (IVS) do município",
+    idhm: "Índice de Desenvolvimento Humano Municipal (IDHM) consolidado",
+    renda_per_capita: "Renda per capita média registrada na base do ministério",
+    taxa_alfabetizacao_municipal: "Enriquecimento socioeducacional: Taxa atual de alfabetização no município (oriunda de silver_alfabetizacao_municipio)"
+  }
+}
+
+/**
+ * Pipeline da Camada Prata - Normalização e Enriquecimento de Vulnerabilidade Social.
+ * Otimizações e limpezas aplicadas (segundo @skill:dataform-bigquery e @skill:data-autocleaning):
+ *  - Normalização estrita de chaves territoriais com LPAD(TRIM(...), 7, '0').
+ *  - Conversão de vírgula decimal brasileira em ponto com REPLACE e tipagem segura com SAFE_CAST.
+ *  - Cruzamento analítico com a tabela de alfabetização municipal da Camada Prata.
+ */
+SELECT
+  COALESCE(SAFE_CAST(vs.ano AS INT64), 2024) AS ano,
+  LPAD(TRIM(vs.codigo_ibge), 7, '0') AS id_municipio,
+  INITCAP(TRIM(vs.nome_municipio)) AS nome_municipio,
+  SAFE_CAST(REPLACE(vs.ivs, ',', '.') AS FLOAT64) AS indice_vulnerabilidade_social,
+  SAFE_CAST(REPLACE(vs.idhm, ',', '.') AS FLOAT64) AS idhm,
+  SAFE_CAST(REPLACE(vs.renda_per_capita, ',', '.') AS FLOAT64) AS renda_per_capita,
+  SAFE_CAST(alf.taxa_alfabetizacao_atual AS FLOAT64) AS taxa_alfabetizacao_municipal
+FROM ${ref("bronze_vulnerabilidade_social")} AS vs
+LEFT JOIN ${ref("silver_alfabetizacao_municipio")} AS alf
+  ON LPAD(TRIM(vs.codigo_ibge), 7, '0') = alf.id_municipio
+WHERE vs.codigo_ibge IS NOT NULL

@@ -1,0 +1,10 @@
+environments:
+  dev:
+    project: vanehay
+    region: us-central1
+    composer_environment: dev-composer-1iast
+    artifact_storage:
+      bucket: vanehay-composer-artifacts
+      path_prefix: "pipeline-1iast-"
+    pipelines:
+      - source: 'orchestration-pipeline.yaml'

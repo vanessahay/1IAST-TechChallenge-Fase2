@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "vanehay",
+  schema: "1IAST_Fase2",
+  name: "bronze_vulnerabilidade_social",
+  description: "Tabela da Camada Bronze no BigQuery alimentada automaticamente pelo Notebook de ingestão (notebooks/ingestao_vulnerabilidade_social.ipynb)"
+}

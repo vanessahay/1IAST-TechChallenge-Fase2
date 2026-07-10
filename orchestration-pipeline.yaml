@@ -1,0 +1,31 @@
+# Pipeline de Orquestração Declarativa (Cloud Composer / Airflow)
+# Integração: Ingestão de Vulnerabilidade Social via Notebook BigQuery + Execução do Dataform
+tags:
+  - "job:datacloud:vscode"
+
+pipelineId: "pipeline1IASTFase2OrquestracaoCompleta"
+description: "Orquestra a execução sequencial do Notebook de ingestão (Vulnerabilidade Social) no BigQuery e, em seguida, dispara a compilação e materialização de todas as camadas Medalhão (Bronze, Prata, Ouro e Qualidade) no Google Cloud Dataform."
+
+schedule:
+  cron: "0 6 * * 1"  # Toda segunda-feira às 06:00 UTC
+  startTime: "2026-07-10T00:00:00"
+  endTime: "2030-12-31T23:59:59"
+
+tasks:
+  - taskId: "taskIngestaoVulnerabilidadeSocialNotebook"
+    description: "Executa o Notebook Jupyter no BigQuery para extrair os dados públicos de Vulnerabilidade Social do portal VIS/SAGI e carregar na tabela bronze_vulnerabilidade_social."
+    notebook:
+      notebookPath: "gs://<ARTIFACT_BUCKET_NAME>/notebooks/ingestao_vulnerabilidade_social.ipynb"
+      kernel: "PYTHON3"
+      parameters:
+        project_id: "vanehay"
+        dataset_id: "1IAST_Fase2"
+
+  - taskId: "taskExecucaoDataformPipelineCompleto"
+    description: "Dispara a execução de todas as tabelas Bronze, Prata, Ouro e Asserções de Qualidade no repositório Dataform PIPE_1IAST_Fase2 após a conclusão da carga pelo Notebook."
+    dependsOn:
+      - "taskIngestaoVulnerabilidadeSocialNotebook"
+    dataform:
+      repository: "projects/vanehay/locations/us-central1/repositories/PIPE_1IAST_Fase2"
+      workspace: "dev-workspace"
+      compilationResult: "latest"
