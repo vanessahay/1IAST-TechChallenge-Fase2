@@ -2,7 +2,7 @@ config {
   type: "table",
   schema: "1IAST_Fase2",
   name: "silver_vulnerabilidade_social",
-  description: "Tabela Camada Prata (Silver) com os indicadores de Vulnerabilidade Social normalizados (código IBGE de 7 dígitos) e tipados, cruzados com as avaliações municipais de alfabetização. Particionada por ano (RANGE_BUCKET).",
+  description: "Tabela Camada Prata (Silver) com os indicadores de Vulnerabilidade Social normalizados em nível municipal (código IBGE de 7 dígitos) e tipados, cruzados com as avaliações municipais de alfabetização. Particionada por ano (RANGE_BUCKET).",
   bigquery: {
     partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
   },
@@ -14,11 +14,11 @@ config {
     ano: "Ano de referência do indicador socioeconômico (coluna de partição por RANGE_BUCKET)",
     data_referencia: "Data completa de medição/referência da extração do portal SAGI/VIS",
     id_municipio: "Código IBGE padronizado de 7 dígitos preenchido com zero à esquerda",
-    nome_territorio: "Nome do território ou município padronizado em formato INITCAP",
+    nome_territorio: "Nome do município padronizado em formato INITCAP",
     sigla_uf: "Sigla da Unidade da Federação em maiúsculas (ou BR para dados agregados nacionais)",
-    qtd_familias_extrema_pobreza: "Quantidade de famílias cadastradas em situação de extrema pobreza (RFPC <= R$ 140/70)",
-    qtd_familias_baixa_renda: "Quantidade de famílias cadastradas em situação de baixa renda (RFPC até meio salário)",
-    qtd_familias_acima_meio_salario: "Quantidade de famílias cadastradas acima de meio salário mínimo",
+    qtd_familias_extrema_pobreza: "Quantidade de domicílios com famílias em situação de extrema pobreza (segundo faixas do Programa Bolsa Família / CadÚnico)",
+    qtd_familias_baixa_renda: "Quantidade de domicílios com famílias de baixa renda (RFPC entre R$ 140,01 e R$ 272,00)",
+    qtd_familias_acima_meio_salario: "Quantidade de domicílios com famílias registradas com renda per capita acima de R$ 272,00 / meio salário",
     taxa_alfabetizacao_municipal: "Enriquecimento socioeducacional: Taxa atual de alfabetização no município (oriunda de silver_alfabetizacao_municipio)"
   }
 }
@@ -26,8 +26,8 @@ config {
 /**
  * Pipeline da Camada Prata - Normalização e Enriquecimento de Vulnerabilidade Social.
  * Otimizações e limpezas aplicadas (segundo @skill:dataform-bigquery e @skill:data-autocleaning):
- *  - Normalização estrita de chaves territoriais com LPAD(TRIM(codigo_ibge), 7, '0').
- *  - Tratamento e enriquecimento da sigla_uf com COALESCE/CASE (preenchendo 'BR' para Brasil ou cruzando com IBGE/município).
+ *  - Normalização estrita de chaves territoriais municipais com LPAD(TRIM(codigo_ibge), 7, '0').
+ *  - Tratamento da sigla_uf com COALESCE/CASE (garantindo sigla do estado e cruzamento limpo com o diretório IBGE).
  *  - Cruzamento analítico com a tabela de alfabetização municipal da Camada Prata.
  */
 SELECT
@@ -48,6 +48,6 @@ SELECT
 FROM ${ref("bronze_vulnerabilidade_social")} AS vs
 LEFT JOIN ${ref("silver_alfabetizacao_municipio")} AS alf
   ON LPAD(TRIM(vs.codigo_ibge), 7, '0') = alf.id_municipio
-LEFT JOIN ${ref("br_bd_diretorios_brasil_municipio")} AS dir
+LEFT JOIN ${ref("br_bd_diretorios_brasil")} AS dir
   ON LPAD(TRIM(vs.codigo_ibge), 7, '0') = dir.id_municipio
 WHERE vs.codigo_ibge IS NOT NULL
