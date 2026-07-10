@@ -1,0 +1,39 @@
+config {
+  type: "assertion",
+  schema: "1IAST_Fase2",
+  name: "assert_consistencia_macro_brasil_vs_uf",
+  description: "Regra de Qualidade (Consistência entre Tabelas): Checa se a discrepância entre a média estadual simples/ponderada (silver_alfabetizacao_uf) e o indicador consolidado nacional (silver_alfabetizacao_brasil) não ultrapassa os limites estatísticos toleráveis (25 p.p.)."
+}
+
+/**
+ * Asserção de Qualidade de Dados - Consistência Cruzada entre Tabelas.
+ * Retorna pares de anos e redes cuja diferença entre as tabelas Nacional e Estadual apresente divergência atípica ou erro de consolidação.
+ */
+WITH media_uf AS (
+  SELECT
+    ano,
+    rede,
+    AVG(taxa_alfabetizacao_atual) AS media_simples_ufs
+  FROM ${ref("silver_alfabetizacao_uf")}
+  WHERE taxa_alfabetizacao_atual IS NOT NULL
+  GROUP BY ano, rede
+),
+consolidado_br AS (
+  SELECT
+    ano,
+    rede,
+    taxa_alfabetizacao_atual AS taxa_nacional
+  FROM ${ref("silver_alfabetizacao_brasil")}
+  WHERE taxa_alfabetizacao_atual IS NOT NULL
+)
+SELECT
+  br.ano,
+  br.rede,
+  br.taxa_nacional,
+  uf.media_simples_ufs,
+  ABS(br.taxa_nacional - uf.media_simples_ufs) AS discrepancia_pp
+FROM consolidado_br AS br
+INNER JOIN media_uf AS uf
+  ON br.ano = uf.ano
+  AND br.rede = uf.rede
+WHERE ABS(br.taxa_nacional - uf.media_simples_ufs) > 25.0

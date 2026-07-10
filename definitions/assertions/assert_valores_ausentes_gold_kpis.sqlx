@@ -1,0 +1,19 @@
+config {
+  type: "assertion",
+  schema: "1IAST_Fase2",
+  name: "assert_valores_ausentes_gold_kpis",
+  description: "Regra de Qualidade (Valores Ausentes): Detecta se existe qualquer registro com chave territorial nula (ano ou id_municipio) ou sem classificação executiva (status_atingimento_meta) na camada Ouro."
+}
+
+/**
+ * Asserção de Qualidade de Dados - Detecção de Valores Ausentes (Nullness).
+ * Retorna registros em que campos mandatórios estão como NULL na tabela analítica final.
+ */
+SELECT
+  ano,
+  id_municipio,
+  status_atingimento_meta
+FROM ${ref("gold_indicadores_municipais")}
+WHERE ano IS NULL
+   OR id_municipio IS NULL
+   OR status_atingimento_meta IS NULL

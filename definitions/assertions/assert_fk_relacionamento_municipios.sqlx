@@ -1,0 +1,21 @@
+config {
+  type: "assertion",
+  schema: "1IAST_Fase2",
+  name: "assert_fk_relacionamento_municipios",
+  description: "Regra de Qualidade (Integridade Referencial / Relacionamento): Valida se 100% dos códigos de município (id_municipio) da camada Prata possuem correspondência exata na tabela de diretório oficial do IBGE."
+}
+
+/**
+ * Asserção de Qualidade de Dados - Validação de Chaves de Relacionamento (Foreign Key).
+ * Retorna os códigos de município presentes nos dados tratados que não existem no cadastro do IBGE.
+ */
+SELECT
+  prata.ano,
+  prata.id_municipio,
+  prata.id_municipio_nome
+FROM ${ref("silver_alfabetizacao_municipio")} AS prata
+LEFT JOIN ${ref("br_bd_diretorios_brasil", "municipio")} AS ibge
+  ON prata.id_municipio = LPAD(TRIM(ibge.id_municipio), 7, '0')
+WHERE ibge.id_municipio IS NULL
+  AND prata.id_municipio IS NOT NULL
+  AND prata.id_municipio != '0000000'

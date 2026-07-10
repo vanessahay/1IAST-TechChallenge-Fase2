@@ -1,0 +1,19 @@
+config {
+  type: "assertion",
+  schema: "1IAST_Fase2",
+  name: "assert_duplicidade_silver_municipio",
+  description: "Regra de Qualidade (Duplicidade): Garante que a combinação (ano, id_municipio, rede) seja estritamente única na tabela silver_alfabetizacao_municipio. Se retornar linhas, há registros duplicados."
+}
+
+/**
+ * Asserção de Qualidade de Dados - Verificação de Duplicidade.
+ * Retorna registros que violam a chave primária composta da camada Prata.
+ */
+SELECT
+  ano,
+  id_municipio,
+  rede,
+  COUNT(*) AS qtd_ocorrencias
+FROM ${ref("silver_alfabetizacao_municipio")}
+GROUP BY ano, id_municipio, rede
+HAVING qtd_ocorrencias > 1
