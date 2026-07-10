@@ -2,12 +2,9 @@ config {
   type: "table",
   schema: "1IAST_Fase2",
   name: "bronze_uf",
-  description: "Tabela camada bronze com dados de avaliação de alfabetização por UF (INEP/Base dos Dados), enriquecidos com nomes de UF, série e rede de ensino.",
+  description: "Tabela camada bronze com dados de avaliação de alfabetização por UF (INEP/Base dos Dados), enriquecidos com nomes de UF, série e rede de ensino. Particionada por ano escolar (RANGE_BUCKET). Esta tabela agrupa os indicadores de alfabetização do INEP por Unidade da Federação, integrando os códigos numéricos/chaves com suas respectivas descrições de série escolar e rede de ensino a partir dos dicionários oficiais da Base dos Dados.",
   bigquery: {
     partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
-  },
-  metadata: {
-    overview: "Esta tabela agrupa os indicadores de alfabetização do INEP por Unidade da Federação, integrando os códigos numéricos/chaves com suas respectivas descrições de série escolar e rede de ensino a partir dos dicionários oficiais da Base dos Dados. A base é particionada por ano para otimização de consultas históricas."
   },
   columns: {
     ano: "Ano de aplicação da avaliação estadual (coluna de partição por RANGE_BUCKET)",

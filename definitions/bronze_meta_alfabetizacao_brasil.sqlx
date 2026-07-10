@@ -2,12 +2,9 @@ config {
   type: "table",
   schema: "1IAST_Fase2",
   name: "bronze_meta_alfabetizacao_brasil",
-  description: "Tabela camada bronze com indicadores e metas de alfabetização no Brasil (2024 a 2030), oriunda do INEP / Base dos Dados.",
+  description: "Tabela camada bronze com indicadores e metas de alfabetização no Brasil (2024 a 2030), oriunda do INEP / Base dos Dados. Esta tabela consolida os percentuais de participação, as taxas atuais de alfabetização e as metas evolutivas traçadas pelo INEP para o Brasil no período de 2024 a 2030. Os dados foram limpos e padronizados para garantir consistência em análises e relatórios executivos.",
   bigquery: {
     partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
-  },
-  metadata: {
-    overview: "Esta tabela consolida os percentuais de participação, as taxas atuais de alfabetização e as metas evolutivas traçadas pelo INEP para o Brasil no período de 2024 a 2030. Os dados foram limpos e padronizados para garantir consistência em análises e relatórios executivos."
   },
   columns: {
     ano: "Ano de referência da avaliação (coluna de partição por RANGE_BUCKET)",
