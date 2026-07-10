@@ -1,0 +1,57 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "gold_evolucao_temporal_indicadores",
+  description: "Tabela camada Ouro (Gold) preparada para análises estatísticas e séries temporais, calculando a variação anual e tendências longitudinais de alfabetização por território. Particionada por ano escolar (RANGE_BUCKET).",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de referência da medição escolar (coluna de partição por RANGE_BUCKET)",
+    esfera_geografica: "Nível territorial da série temporal (Nacional, Estadual, Municipal)",
+    codigo_territorial: "Código identificador do território (BR, sigla da UF ou código IBGE 7 dígitos)",
+    nome_territorial: "Nome do território em análise",
+    rede: "Rede de ensino analisada longitudinalmente",
+    taxa_alfabetizacao_atual: "Taxa de alfabetização no ciclo atual",
+    taxa_ano_anterior: "Taxa de alfabetização registrada no ciclo de medição imediatamente anterior (LAG)",
+    variacao_anual_pp: "Variação em pontos percentuais entre o ano atual e o anterior (tendência de crescimento ou queda)",
+    media_movel_3_ciclos: "Média móvel dos últimos 3 ciclos medidos para suavização de série temporal"
+  }
+}
+
+/**
+ * Pipeline da Camada Ouro - Evolução Temporal e Séries Estatísticas.
+ * Otimizações e regras analíticas (segundo @skill:dataform-bigquery e @skill:developing-with-bigquery):
+ *  - Aplicação de funções de janela estatísticas LAG e AVG com OVER(PARTITION BY ... ORDER BY ano).
+ *  - Suavização de tendências longitudinais prontas para regressões estatísticas.
+ */
+WITH base_unificada AS (
+  SELECT ano, esfera_geografica, codigo_territorial, nome_territorial, rede, taxa_alfabetizacao_atual
+  FROM ${ref("gold_comparativo_metas_resultados")}
+  WHERE taxa_alfabetizacao_atual IS NOT NULL
+)
+SELECT
+  ano,
+  esfera_geografica,
+  codigo_territorial,
+  nome_territorial,
+  rede,
+  taxa_alfabetizacao_atual,
+  LAG(taxa_alfabetizacao_atual) OVER (
+    PARTITION BY esfera_geografica, codigo_territorial, rede ORDER BY ano
+  ) AS taxa_ano_anterior,
+  ROUND(
+    taxa_alfabetizacao_atual - LAG(taxa_alfabetizacao_atual) OVER (
+      PARTITION BY esfera_geografica, codigo_territorial, rede ORDER BY ano
+    ),
+    2
+  ) AS variacao_anual_pp,
+  ROUND(
+    AVG(taxa_alfabetizacao_atual) OVER (
+      PARTITION BY esfera_geografica, codigo_territorial, rede
+      ORDER BY ano
+      ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+    ),
+    2
+  ) AS media_movel_3_ciclos
+FROM base_unificada

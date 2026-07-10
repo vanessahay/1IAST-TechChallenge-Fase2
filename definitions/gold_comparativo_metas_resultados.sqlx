@@ -1,0 +1,71 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "gold_comparativo_metas_resultados",
+  description: "Tabela camada Ouro (Gold) unificando a comparação executiva entre metas e resultados reais nas esferas Nacional (Brasil), Estadual (UF) e Municipal, calculando o percentual de atingimento pactuado. Particionada por ano escolar (RANGE_BUCKET).",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de referência da medição e pactuação de metas (coluna de partição por RANGE_BUCKET)",
+    esfera_geografica: "Esfera de agregação (Brasil, Estadual, Municipal)",
+    codigo_territorial: "Código territorial (ex: BR, SP, RJ, 3550308)",
+    nome_territorial: "Nome oficial do território de avaliação (país, estado ou município)",
+    rede: "Rede de ensino avaliada (Total, Pública, Municipal)",
+    taxa_alfabetizacao_atual: "Taxa de alfabetização real alcançada na avaliação escolar",
+    meta_alfabetizacao_2024: "Meta de alfabetização pactuada para 2024",
+    desvio_absoluto_pp: "Diferença em pontos percentuais entre o resultado alcançado e a meta de 2024",
+    percentual_atingimento_meta: "Percentual relacional de atingimento da meta ((taxa_atual / meta_2024) * 100)"
+  }
+}
+
+/**
+ * Pipeline da Camada Ouro - Comparativo Multi-Nível entre Metas e Resultados.
+ * Otimizações e regras analíticas (segundo @skill:dataform-bigquery e @skill:developing-with-bigquery):
+ *  - UNION ALL otimizado combinando as 3 esferas geográficas da camada Prata.
+ *  - Divisão segura com NULLIF para evitar erros de divisão por zero na computação do percentual.
+ */
+WITH consolida_brasil AS (
+  SELECT
+    ano,
+    '1. Nacional (Brasil)' AS esfera_geografica,
+    'BR' AS codigo_territorial,
+    'Brasil (Média Nacional)' AS nome_territorial,
+    rede,
+    taxa_alfabetizacao_atual,
+    meta_alfabetizacao_2024,
+    desvio_meta_2024 AS desvio_absoluto_pp,
+    ROUND((taxa_alfabetizacao_atual / NULLIF(meta_alfabetizacao_2024, 0)) * 100, 2) AS percentual_atingimento_meta
+  FROM ${ref("silver_alfabetizacao_brasil")}
+),
+consolida_uf AS (
+  SELECT
+    ano,
+    '2. Estadual (UF)' AS esfera_geografica,
+    sigla_uf AS codigo_territorial,
+    sigla_uf_nome AS nome_territorial,
+    rede,
+    taxa_alfabetizacao_atual,
+    meta_alfabetizacao_2024,
+    desvio_meta_2024 AS desvio_absoluto_pp,
+    ROUND((taxa_alfabetizacao_atual / NULLIF(meta_alfabetizacao_2024, 0)) * 100, 2) AS percentual_atingimento_meta
+  FROM ${ref("silver_alfabetizacao_uf")}
+),
+consolida_municipio AS (
+  SELECT
+    ano,
+    '3. Municipal' AS esfera_geografica,
+    id_municipio AS codigo_territorial,
+    id_municipio_nome AS nome_territorial,
+    rede,
+    taxa_alfabetizacao_atual,
+    meta_alfabetizacao_2024,
+    desvio_meta_2024 AS desvio_absoluto_pp,
+    ROUND((taxa_alfabetizacao_atual / NULLIF(meta_alfabetizacao_2024, 0)) * 100, 2) AS percentual_atingimento_meta
+  FROM ${ref("silver_alfabetizacao_municipio")}
+)
+SELECT * FROM consolida_brasil
+UNION ALL
+SELECT * FROM consolida_uf
+UNION ALL
+SELECT * FROM consolida_municipio

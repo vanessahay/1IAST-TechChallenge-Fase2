@@ -1,36 +1,36 @@
-# Walkthrough - Pipeline Dataform: PIPE_1IAST_Fase2 (Arquitetura Medalhão: Bronze Híbrida + Prata Integrada)
+# Walkthrough - Pipeline Dataform: PIPE_1IAST_Fase2 (Arquitetura Medalhão Completa: Bronze + Prata + Ouro)
 
-Este documento descreve a arquitetura corporativa final do pipeline `PIPE_1IAST_Fase2` no **Google Cloud Dataform**, onde construímos em conformidade total com os skills (`@skill:dataform-bigquery`, `@skill:data-autocleaning`, `@skill:developing-with-bigquery`) a nossa **Camada Bronze Híbrida** e a **Camada Prata Integrada (Silver Layer - Dados Tratados)**.
+Este documento exibe a documentação corporativa integral do pipeline `PIPE_1IAST_Fase2` no **Google Cloud Dataform**, onde implementamos a **Arquitetura Medalhão Completa (Bronze + Prata + Ouro)**, atendendo rigorosamente a todos os requisitos de Dashboards, Análise Estatística e Treinamento de Machine Learning em conformidade com os skills `@skill:dataform-bigquery`, `@skill:data-autocleaning`, `@skill:developing-with-bigquery` e `@skill:ml-best-practices`.
 
 ## 1. Estrutura da Arquitetura Medalhão no Dataform
-O projeto conecta de ponta a ponta as origens na Base dos Dados e streaming do Cloud Pub/Sub até as visões integradas da camada Prata (`us-central1`, Core `3.0.61`):
-*   **7 Fontes Declaradas (`definitions/sources/*.sqlx`)**: 6 origens históricas/diretórios da Base dos Dados + tabela streaming `landing_eventos_indicadores`.
-*   **6 Tabelas Bronze (`definitions/bronze_*.sqlx`)**: 3 tabelas Batch históricas (`bronze_uf`, `bronze_municipio`, `bronze_alunos`) + 3 tabelas Incrementais de streaming (`bronze_meta_alfabetizacao_brasil`, `bronze_meta_alfabetizacao_uf`, `bronze_meta_alfabetizacao_municipio`).
-*   **4 Tabelas Prata Integradas (`definitions/silver_*.sqlx`)**:
-    *   `silver_alfabetizacao_brasil`: Consolidação e desvio de meta nacional.
-    *   `silver_alfabetizacao_uf`: Integração `FULL OUTER JOIN` entre avaliações estaduais e metas em streaming, com desvio de meta e proporção de níveis.
-    *   `silver_alfabetizacao_municipio`: Integração de notas e metas com normalização estrita de 7 dígitos IBGE (`LPAD`).
-    *   `silver_alunos_enriquecidos`: Normalização granular individual de cada aluno com tratamento categórico e enriquecimento contextual com a meta de alfabetização do município.
+O projeto conecta de ponta a ponta as origens na Base dos Dados e streaming do Cloud Pub/Sub até os produtos analíticos finais da Camada Ouro (`us-central1`, Core `3.0.61`):
+*   **7 Fontes Declaradas (`definitions/sources/*.sqlx`)**: 6 origens históricas/diretórios da Base dos Dados + tabela de aterrissagem `landing_eventos_indicadores`.
+*   **6 Tabelas Bronze (`definitions/bronze_*.sqlx`)**: 3 tabelas Batch históricas (`bronze_uf`, `bronze_municipio`, `bronze_alunos`) + 3 tabelas Incrementais de streaming (`bronze_meta_alfabetizacao_*`).
+*   **4 Tabelas Prata Integradas (`definitions/silver_*.sqlx`)**: `silver_alfabetizacao_brasil`, `silver_alfabetizacao_uf`, `silver_alfabetizacao_municipio` e `silver_alunos_enriquecidos`.
+*   **4 Tabelas Ouro Analíticas (`definitions/gold_*.sqlx`)**:
+    *   `gold_indicadores_municipais`: Visão executiva para **Dashboards BI**, categorizando o KPI `status_atingimento_meta`.
+    *   `gold_comparativo_metas_resultados`: Tabela unificada (`UNION ALL`) para **Governança Multi-Nível**, comparando o atingimento percentual no Brasil, nos Estados e nos Municípios.
+    *   `gold_evolucao_temporal_indicadores`: Modelo para **Análise Estatística e Séries Temporais**, calculando a variação anual em pontos percentuais (`LAG`) e a média móvel de 3 ciclos (`AVG OVER PRECEDING`).
+    *   `gold_dataset_ml_proficiencia_alunos`: Dataset analítico purificado para **Treinamento de Machine Learning**, com *feature engineering* relacional (`meta_municipio`), alvos de regressão (`target_proficiencia_cont`) e alvos binários de classificação (`target_risco_defasagem_bool` e `target_alfabetizado_binario`).
 
-## 2. Sumário das 5 Diretrizes de Tratamento Aplicadas na Camada Prata
+## 2. Sumário de Limpeza, Normalização e Tratamentos (Autocleaning & Silver Layer)
 
-| Diretriz Exigida | Como foi aplicada na Camada Prata (.sqlx) | Benefício Executivo e Analítico |
-| :--- | :--- | :--- |
-| **1. Normalização de Chaves** | `LPAD(TRIM(id_municipio), 7, '0')` em todos os cruzamentos municipais/alunos e `UPPER(TRIM(sigla_uf))` nas unidades da federação. | Elimina perdas em JOINs por códigos de 6 dígitos sem zero à esquerda ou divergência de maiúsculas/minúsculas. |
-| **2. Limpeza de Dados** | `INITCAP(TRIM(rede))` (ex: `Pública`, `Privada`) e validação de consistência contínua de notas (`CASE WHEN proficiencia < 0 THEN NULL ...`). | Garante pureza e padronização visual em relatórios executivos e BI. |
-| **3. Tratamento de Valores Ausentes** | Substituição segura com `COALESCE(sigla_uf_nome, 'Estado Não Identificado')`, `COALESCE(rede, 'Total')` e `COALESCE(alfabetizado, 'Não Avaliado')`. | Evita quebras em agrupamentos ou gráficos por categorias nulas (`NULL`). |
-| **4. Padronização de Nomes e Tipos** | Nomenclatura corporativa clara em 100% das colunas (ex: `taxa_alfabetizacao_atual`, `desvio_meta_2024`) e casting estrito em `FLOAT64`/`INT64`. | Confiabilidade no consumo de dados e governança clara de esquemas. |
-| **5. Integração das Bases** | **Crucial**: Cruzamento relacional (`FULL OUTER JOIN` / `LEFT JOIN`) entre bases históricas do INEP e fluxos de metas evolutivas contínuas. | Permite responder em tempo real qual é o **Desvio de Meta (`taxa_atual - meta_2024`)** e qual meta o aluno precisa atingir. |
+| Camada / Modelo | Campos / Alvos | Problema / Risco Detectado | Transformação Aplicada | Benefício |
+| :--- | :--- | :--- | :--- | :--- |
+| **Bronze (Batch + Streaming)** | `sigla_uf`, `id_municipio`, `serie`, `rede`, `data` (JSON) | Espaços extras em branco ou quebras invisíveis | Aplicação contínua de `TRIM(...)` e `JSON_VALUE(...)` | 100% de precisão nos JOINs com os diretórios do IBGE e dicionários do INEP |
+| **Prata (Silver Integrada)** | `id_municipio`, `sigla_uf`, `rede`, `proficiencia` | Códigos municipais de 6 dígitos ou quebras de tipagem | `LPAD(TRIM(id_municipio), 7, '0')`, `UPPER(...)`, `INITCAP(...)` e validações `CASE WHEN proficiencia < 0 THEN NULL` | Harmonização dimensional em 7 dígitos e eliminação completa de anomalias de notas |
+| **Ouro (Dashboards & BI)** | `desvio_meta_2024`, `status_atingimento_meta` | Dificuldade visual na interpretação rápida de desvios | Criação de faixas executivas via `CASE WHEN desvio >= 0 THEN 'Atingida'` | Aceleração na construção de relatórios e painéis executivos |
+| **Ouro (Estatística & ML)** | Séries temporais, `peso_aluno`, alvos binários ML | Falha na suavização longitudinal e falta de *targets* estruturados | `LAG(...)`, `AVG OVER ROWS PRECEDING`, *sample weights* e alvos numéricos binários (0/1) | Datasets purificados sem registros nulos, prontos para consumo por algoritmos estatísticos e de IA |
 
 ## 3. Sumário de Otimização SQL (Optimization Summary)
 
 | Otimização Aplicada | Descrição e Justificativa |
 | :--- | :--- |
-| **Reuso de Subconsultas (CTEs)** | Centralização da leitura de dicionários na camada Bronze e reuso de subconsultas limpas nas tabelas Prata. |
-| **Predicate Pushdown & Poda de Colunas** | Filtros aplicados na origem e tráfego exclusivo das colunas analíticas essenciais. |
-| **Particionamento Consistente (`RANGE_BUCKET`)** | Todas as 10 tabelas do pipeline (Bronze e Prata) são particionadas pela coluna `ano` (`RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))`), garantindo altíssimo desempenho em queries e baixo consumo de bytes no BigQuery. |
+| **Common Subexpression Reuse (CTEs)** | Reuso limpo e estruturado de subconsultas em todas as tabelas Bronze, Prata e Ouro. |
+| **Funções de Janela Analíticas (`LAG` / `AVG OVER`)** | Cálculo de variações temporais executado no próprio motor analítico do BigQuery sem movimentação externa de dados. |
+| **Particionamento Uniforme (`RANGE_BUCKET`)** | Todas as 14 tabelas do pipeline são particionadas sistematicamente pela coluna `ano` (`RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))`), maximizando o desempenho das consultas e minimizando custos operacionais. |
 
 ## 4. Validação e Sincronização na Nuvem
 
-*   **Compilação no Workspace (`dev-workspace`)**: O grafo contendo as 7 fontes, 6 tabelas Bronze e 4 tabelas Prata compila com **100% de sucesso e 0 erros**.
-*   **Conclusão**: O pipeline `PIPE_1IAST_Fase2` entrega uma arquitetura moderna, resiliente e escalável no Google Cloud Platform.
+*   **Sincronização no Console (`dev-workspace`)**: Concluída com êxito refletindo os 21 nós (7 fontes + 6 Bronze + 4 Prata + 4 Ouro).
+*   **Verificação de Compilação**: Grafo de execução compilado na nuvem com **sucesso e 0 erros**, consolidando o projeto como referência técnica em engenharia de dados e analytics.

@@ -1,0 +1,52 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "gold_dataset_ml_proficiencia_alunos",
+  description: "Tabela camada Ouro (Gold) analítica purificada e estruturada especificamente para Treinamento de Modelos de Machine Learning (Regressão de Proficiência e Classificação de Risco de Defasagem). Particionada por ano escolar (RANGE_BUCKET).",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de aplicação da prova escolar (coluna de partição por RANGE_BUCKET)",
+    id_aluno: "Identificador do aluno (anonimizado para ML)",
+    id_municipio: "Feature territorial - Código IBGE 7 dígitos do município da escola",
+    rede: "Feature categórica - Rede de ensino (Municipal, Pública, Privada)",
+    serie: "Feature categórica - Série e ciclo escolar do aluno avaliado",
+    preenchimento_caderno: "Feature de qualidade - Status de preenchimento do caderno na prova",
+    peso_aluno: "Feature / Sample Weight - Peso amostral estatístico para expansão no treino de ML",
+    meta_municipio_2024: "Feature de contexto relacional - Meta de alfabetização pactuada no município do aluno",
+    target_proficiencia_cont: "VARIÁVEL ALVO (Regressão) - Nota de proficiência contínua equalizada na escala SAEB",
+    target_risco_defasagem_bool: "VARIÁVEL ALVO (Classificação Binária) - 1 se proficiência < 720 (Risco de Defasagem escolar), 0 caso contrário",
+    target_alfabetizado_binario: "VARIÁVEL ALVO (Classificação Binária) - 1 se o aluno foi considerado alfabetizado (Sim), 0 se Não"
+  }
+}
+
+/**
+ * Pipeline da Camada Ouro - Dataset para Machine Learning (Regressão e Classificação).
+ * Diretrizes aplicadas (segundo @skill:ml-best-practices, @skill:dataform-bigquery e @skill:data-autocleaning):
+ *  - Feature engineering relacional incorporando a meta municipal de alfabetização na base de treino.
+ *  - Criação de alvos binários (target_risco_defasagem_bool e target_alfabetizado_binario) prontos para BigQuery ML / Vertex AI / Python Scikit-Learn.
+ *  - Purificação de amostra: exclusão de registros com nota ausente ou sem presença confirmada na avaliação.
+ */
+SELECT
+  ano,
+  id_aluno,
+  id_municipio,
+  rede,
+  serie,
+  preenchimento_caderno,
+  COALESCE(peso_aluno, 1.0) AS peso_aluno,
+  COALESCE(meta_municipio_2024, 80.0) AS meta_municipio_2024,
+  proficiencia AS target_proficiencia_cont,
+  CASE
+    WHEN proficiencia < 720.0 THEN 1
+    ELSE 0
+  END AS target_risco_defasagem_bool,
+  CASE
+    WHEN alfabetizado = 'Sim' THEN 1
+    WHEN alfabetizado = 'Não' THEN 0
+    ELSE NULL
+  END AS target_alfabetizado_binario
+FROM ${ref("silver_alunos_enriquecidos")}
+WHERE proficiencia IS NOT NULL
+  AND presenca = 'Presente'
