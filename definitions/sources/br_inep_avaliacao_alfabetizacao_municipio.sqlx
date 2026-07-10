@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "basedosdados",
+  schema: "br_inep_avaliacao_alfabetizacao",
+  name: "municipio",
+  description: "Tabela com dados de avaliação de alfabetização por Município do INEP (Base dos Dados)",
+}

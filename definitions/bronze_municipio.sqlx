@@ -1,0 +1,91 @@
+config {
+  type: "table",
+  schema: "1IAST_Fase2",
+  name: "bronze_municipio",
+  description: "Tabela camada bronze com dados de avaliação de alfabetização por Município (INEP/Base dos Dados), enriquecidos com nomes de município (IBGE), série e rede de ensino. Particionada por ano escolar (RANGE_BUCKET). Esta tabela consolida os indicadores granulares de alfabetização por Município, cruzando códigos de série, rede e identificador IBGE com os diretórios e dicionários da Base dos Dados.",
+  bigquery: {
+    partitionBy: "RANGE_BUCKET(ano, GENERATE_ARRAY(2000, 2050, 1))"
+  },
+  columns: {
+    ano: "Ano de aplicação da avaliação municipal (coluna de partição por RANGE_BUCKET)",
+    id_municipio: "Código identificador de 7 dígitos do Município (IBGE)",
+    id_municipio_nome: "Nome por extenso do Município",
+    serie: "Ano ou série escolar avaliada",
+    rede: "Rede de ensino avaliada (ex: Pública, Privada, Municipal, Total)",
+    taxa_alfabetizacao: "Percentual de alunos avaliados considerados alfabetizados no município",
+    media_portugues: "Média ponderada na disciplina de Língua Portuguesa equalizada com o SAEB",
+    proporcao_aluno_nivel_0: "Proporção de alunos alocados no nível de desempenho 0",
+    proporcao_aluno_nivel_1: "Proporção de alunos alocados no nível de desempenho 1",
+    proporcao_aluno_nivel_2: "Proporção de alunos alocados no nível de desempenho 2",
+    proporcao_aluno_nivel_3: "Proporção de alunos alocados no nível de desempenho 3",
+    proporcao_aluno_nivel_4: "Proporção de alunos alocados no nível de desempenho 4",
+    proporcao_aluno_nivel_5: "Proporção de alunos alocados no nível de desempenho 5",
+    proporcao_aluno_nivel_6: "Proporção de alunos alocados no nível de desempenho 6",
+    proporcao_aluno_nivel_7: "Proporção de alunos alocados no nível de desempenho 7",
+    proporcao_aluno_nivel_8: "Proporção de alunos alocados no nível de desempenho 8"
+  }
+}
+
+/**
+ * Pipeline de transformação e enriquecimento dos dados de alfabetização por Município.
+ * Otimizações aplicadas (segundo @skill:developing-with-bigquery):
+ *  - Common Subexpression Reuse: CTE dicionario_municipio centraliza a leitura para 'serie' e 'rede'.
+ *  - Predicate Pushdown: Filtros de id_tabela = 'municipio' aplicados logo na extração do dicionário.
+ * Limpezas aplicadas (segundo @skill:data-autocleaning):
+ *  - TRIM em campos de junção textual para precisão em joins e agrupamentos.
+ *  - SAFE_CAST em todas as métricas numéricas para evitar erros de conversão no pipeline.
+ */
+WITH dicionario_municipio AS (
+  SELECT
+    nome_coluna,
+    TRIM(chave) AS chave,
+    TRIM(valor) AS valor
+  FROM ${ref("br_inep_avaliacao_alfabetizacao", "dicionario")}
+  WHERE id_tabela = 'municipio'
+    AND nome_coluna IN ('serie', 'rede')
+),
+dicionario_serie AS (
+  SELECT
+    chave AS chave_serie,
+    valor AS descricao_serie
+  FROM dicionario_municipio
+  WHERE nome_coluna = 'serie'
+),
+dicionario_rede AS (
+  SELECT
+    chave AS chave_rede,
+    valor AS descricao_rede
+  FROM dicionario_municipio
+  WHERE nome_coluna = 'rede'
+),
+diretorio_id_municipio AS (
+  SELECT DISTINCT
+    TRIM(id_municipio) AS id_municipio,
+    TRIM(nome) AS nome
+  FROM ${ref("br_bd_diretorios_brasil", "municipio")}
+  WHERE id_municipio IS NOT NULL
+)
+SELECT
+  SAFE_CAST(dados.ano AS INT64) AS ano,
+  TRIM(dados.id_municipio) AS id_municipio,
+  diretorio_id_municipio.nome AS id_municipio_nome,
+  dicionario_serie.descricao_serie AS serie,
+  dicionario_rede.descricao_rede AS rede,
+  SAFE_CAST(dados.taxa_alfabetizacao AS FLOAT64) AS taxa_alfabetizacao,
+  SAFE_CAST(dados.media_portugues AS FLOAT64) AS media_portugues,
+  SAFE_CAST(dados.proporcao_aluno_nivel_0 AS FLOAT64) AS proporcao_aluno_nivel_0,
+  SAFE_CAST(dados.proporcao_aluno_nivel_1 AS FLOAT64) AS proporcao_aluno_nivel_1,
+  SAFE_CAST(dados.proporcao_aluno_nivel_2 AS FLOAT64) AS proporcao_aluno_nivel_2,
+  SAFE_CAST(dados.proporcao_aluno_nivel_3 AS FLOAT64) AS proporcao_aluno_nivel_3,
+  SAFE_CAST(dados.proporcao_aluno_nivel_4 AS FLOAT64) AS proporcao_aluno_nivel_4,
+  SAFE_CAST(dados.proporcao_aluno_nivel_5 AS FLOAT64) AS proporcao_aluno_nivel_5,
+  SAFE_CAST(dados.proporcao_aluno_nivel_6 AS FLOAT64) AS proporcao_aluno_nivel_6,
+  SAFE_CAST(dados.proporcao_aluno_nivel_7 AS FLOAT64) AS proporcao_aluno_nivel_7,
+  SAFE_CAST(dados.proporcao_aluno_nivel_8 AS FLOAT64) AS proporcao_aluno_nivel_8
+FROM ${ref("br_inep_avaliacao_alfabetizacao", "municipio")} AS dados
+LEFT JOIN diretorio_id_municipio
+  ON TRIM(dados.id_municipio) = diretorio_id_municipio.id_municipio
+LEFT JOIN dicionario_serie
+  ON TRIM(dados.serie) = dicionario_serie.chave_serie
+LEFT JOIN dicionario_rede
+  ON TRIM(dados.rede) = dicionario_rede.chave_rede
