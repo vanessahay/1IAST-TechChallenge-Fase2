@@ -48,6 +48,6 @@ SELECT
 FROM ${ref("bronze_vulnerabilidade_social")} AS vs
 LEFT JOIN ${ref("silver_alfabetizacao_municipio")} AS alf
   ON LPAD(TRIM(vs.codigo_ibge), 7, '0') = alf.id_municipio
-LEFT JOIN ${ref("br_bd_diretorios_brasil")} AS dir
+LEFT JOIN ${ref("br_bd_diretorios_brasil", "municipio")} AS dir
   ON LPAD(TRIM(vs.codigo_ibge), 7, '0') = dir.id_municipio
 WHERE vs.codigo_ibge IS NOT NULL
