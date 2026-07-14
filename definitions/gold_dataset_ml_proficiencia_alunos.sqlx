@@ -19,6 +19,9 @@ config {
     preenchimento_caderno: "Feature de qualidade - Status de preenchimento do caderno na prova",
     peso_aluno: "Feature / Sample Weight - Peso amostral estatístico para expansão no treino de ML",
     meta_municipio_2024: "Feature de contexto relacional - Meta de alfabetização pactuada no município do aluno",
+    qtd_familias_extrema_pobreza: "Feature socioeconômica - Qtd de famílias em extrema pobreza no município",
+    qtd_familias_baixa_renda: "Feature socioeconômica - Qtd de famílias em situação de baixa renda no município",
+    qtd_familias_acima_meio_salario: "Feature socioeconômica - Qtd de famílias com renda acima de meio salário no município",
     target_proficiencia_cont: "VARIÁVEL ALVO (Regressão) - Nota de proficiência contínua equalizada na escala SAEB",
     target_risco_defasagem_bool: "VARIÁVEL ALVO (Classificação Binária) - 1 se proficiência < 720 (Risco de Defasagem escolar), 0 caso contrário",
     target_alfabetizado_binario: "VARIÁVEL ALVO (Classificação Binária) - 1 se o aluno foi considerado alfabetizado (Sim), 0 se Não"
@@ -33,24 +36,30 @@ config {
  *  - Purificação de amostra: exclusão de registros com nota ausente ou sem presença confirmada na avaliação.
  */
 SELECT
-  ano,
-  id_aluno,
-  id_municipio,
-  rede,
-  serie,
-  preenchimento_caderno,
-  COALESCE(peso_aluno, 1.0) AS peso_aluno,
-  COALESCE(meta_municipio_2024, 80.0) AS meta_municipio_2024,
-  proficiencia AS target_proficiencia_cont,
+  al.ano,
+  al.id_aluno,
+  al.id_municipio,
+  al.rede,
+  al.serie,
+  al.preenchimento_caderno,
+  COALESCE(al.peso_aluno, 1.0) AS peso_aluno,
+  COALESCE(al.meta_municipio_2024, 80.0) AS meta_municipio_2024,
+  COALESCE(vs.qtd_familias_extrema_pobreza, 0.0) AS qtd_familias_extrema_pobreza,
+  COALESCE(vs.qtd_familias_baixa_renda, 0.0) AS qtd_familias_baixa_renda,
+  COALESCE(vs.qtd_familias_acima_meio_salario, 0.0) AS qtd_familias_acima_meio_salario,
+  al.proficiencia AS target_proficiencia_cont,
   CASE
-    WHEN proficiencia < 720.0 THEN 1
+    WHEN al.proficiencia < 720.0 THEN 1
     ELSE 0
   END AS target_risco_defasagem_bool,
   CASE
-    WHEN alfabetizado = 'Sim' THEN 1
-    WHEN alfabetizado = 'Não' THEN 0
+    WHEN al.alfabetizado = 'Sim' THEN 1
+    WHEN al.alfabetizado = 'Não' THEN 0
     ELSE NULL
   END AS target_alfabetizado_binario
-FROM ${ref("silver_alunos_enriquecidos")}
-WHERE proficiencia IS NOT NULL
-  AND presenca = 'Presente'
+FROM ${ref("silver_alunos_enriquecidos")} AS al
+LEFT JOIN ${ref("silver_vulnerabilidade_social")} AS vs
+  ON al.ano = vs.ano
+  AND al.id_municipio = vs.id_municipio
+WHERE al.proficiencia IS NOT NULL
+  AND al.presenca = 'Presente'
