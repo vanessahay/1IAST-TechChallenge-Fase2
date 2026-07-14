@@ -21,7 +21,11 @@ config {
     meta_alfabetizacao_2030: "Meta de alfabetização pactuada para 2030 no município",
     desvio_meta_2024: "Desvio absoluto em pontos percentuais (taxa_atual - meta_2024)",
     status_atingimento_meta: "Classificação executiva de atingimento da meta para visualização rápida em Dashboards BI",
-    nivel_alfabetizacao: "Nível categórico de alfabetização municipal consolidado"
+    nivel_alfabetizacao: "Nível categórico de alfabetização municipal consolidado",
+    sigla_uf: "Sigla da Unidade da Federação do município",
+    qtd_familias_extrema_pobreza: "Média anual de domicílios com famílias em situação de extrema pobreza no município",
+    qtd_familias_baixa_renda: "Média anual de domicílios com famílias de baixa renda no município",
+    qtd_familias_acima_meio_salario: "Média anual de domicílios com famílias registradas com renda per capita acima de meio salário no município"
   }
 }
 
@@ -30,23 +34,30 @@ config {
  * Otimizações e regras analíticas (segundo @skill:dataform-bigquery e @skill:developing-with-bigquery):
  *  - Criação do KPI de negócio status_atingimento_meta via CASE WHEN.
  *  - Seleção limpa das colunas executivas prontas para consumo final.
+ *  - Integração com dados de vulnerabilidade social da camada Prata para evitar joins em runtime.
  */
 SELECT
-  ano,
-  id_municipio,
-  id_municipio_nome,
-  rede,
-  taxa_alfabetizacao_atual,
-  media_portugues,
-  meta_alfabetizacao_2024,
-  meta_alfabetizacao_2030,
-  desvio_meta_2024,
+  m.ano,
+  m.id_municipio,
+  m.id_municipio_nome,
+  m.rede,
+  m.taxa_alfabetizacao_atual,
+  m.media_portugues,
+  m.meta_alfabetizacao_2024,
+  m.meta_alfabetizacao_2030,
+  m.desvio_meta_2024,
   CASE
-    WHEN desvio_meta_2024 IS NULL OR meta_alfabetizacao_2024 IS NULL THEN 'Sem Meta Pactuada / Não Avaliado'
-    WHEN desvio_meta_2024 >= 0 THEN '1. Meta Atingida ou Superada'
-    WHEN desvio_meta_2024 >= -3.0 THEN '2. Atenção - Próximo da Meta'
+    WHEN m.desvio_meta_2024 IS NULL OR m.meta_alfabetizacao_2024 IS NULL THEN 'Sem Meta Pactuada / Não Avaliado'
+    WHEN m.desvio_meta_2024 >= 0 THEN '1. Meta Atingida ou Superada'
+    WHEN m.desvio_meta_2024 >= -3.0 THEN '2. Atenção - Próximo da Meta'
     ELSE '3. Crítico - Abaixo da Meta'
   END AS status_atingimento_meta,
-  nivel_alfabetizacao
-FROM ${ref("silver_alfabetizacao_municipio")}
-WHERE id_municipio IS NOT NULL
+  m.nivel_alfabetizacao,
+  v.sigla_uf,
+  v.qtd_familias_extrema_pobreza,
+  v.qtd_familias_baixa_renda,
+  v.qtd_familias_acima_meio_salario
+FROM ${ref("silver_alfabetizacao_municipio")} m
+LEFT JOIN ${ref("silver_vulnerabilidade_social")} v
+  ON m.id_municipio = v.id_municipio AND m.ano = v.ano
+WHERE m.id_municipio IS NOT NULL

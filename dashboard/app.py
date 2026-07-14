@@ -258,7 +258,7 @@ with tab2:
     # Filtro de UF
     query_list_ufs = """
     SELECT DISTINCT sigla_uf 
-    FROM `vanehay.1IAST_Fase2.silver_vulnerabilidade_social` 
+    FROM `vanehay.1IAST_Fase2.gold_indicadores_municipais` 
     WHERE sigla_uf != 'BR' AND sigla_uf IS NOT NULL
     ORDER BY sigla_uf
     """
@@ -270,7 +270,6 @@ with tab2:
     with col_f2:
         search_mun = st.text_input("Buscar Município por Nome")
     
-    # Build query base
     query_mun = """
     SELECT 
       m.id_municipio_nome as nome,
@@ -279,10 +278,8 @@ with tab2:
       m.meta_alfabetizacao_2024,
       m.desvio_meta_2024,
       m.status_atingimento_meta,
-      v.qtd_familias_extrema_pobreza as extrema_pobreza
+      m.qtd_familias_extrema_pobreza as extrema_pobreza
     FROM `vanehay.1IAST_Fase2.gold_indicadores_municipais` m
-    LEFT JOIN `vanehay.1IAST_Fase2.silver_vulnerabilidade_social` v
-      ON m.id_municipio = v.id_municipio AND m.ano = v.ano
     WHERE m.ano = 2023
     """
     
@@ -291,7 +288,7 @@ with tab2:
     # I already did the LEFT JOIN, so I can use v.sigla_uf.
     
     if selected_uf != "Todas":
-        query_mun += f" AND v.sigla_uf = '{selected_uf}'"
+        query_mun += f" AND m.sigla_uf = '{selected_uf}'"
     if search_mun:
         query_mun += f" AND LOWER(m.id_municipio_nome) LIKE '%{search_mun.lower()}%'"
         
