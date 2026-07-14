@@ -148,12 +148,61 @@ A camada **Gold** (`gold_dataset_ml_proficiencia_alunos`) unifica os dados de pr
 │   ├── silver_*.sqlx                # Modelos de dados da camada Prata
 │   └── gold_*.sqlx                  # Modelos de dados da camada Ouro
 ├── notebooks/                       # Notebooks Jupyter
-│   ├── ingestao_vulnerabilidade_social.ipynb # Script de ingestão automatizada SAGI
-│   └── treinamento_modelo_preditivo.ipynb # Notebook documentando treino de ML
+│   ├── ingestao_vulnerabilidade_social.ipynb # Ingestão automatizada SAGI
+│   └── treinamento_modelo_preditivo.ipynb # Treinamento de ML
 ├── dashboard/                       # Aplicação Web Streamlit
-│   └── app.py                       # Código-fonte da aplicação e interface
+│   └── app.py                       # Código-fonte do painel interativo
+├── requirements.txt                 # Dependências do projeto (dashboard/notebooks)
 ├── orchestration-pipeline.yaml      # DAG declarativa (Composer/Airflow)
 ├── deployment.yaml                  # Configurações de ambiente de implantação
 ├── workflow_settings.yaml           # Configuração de infraestrutura do Dataform
 └── README.md                        # Documentação de entrega (este arquivo)
 ```
+
+---
+
+## 8. Como Executar o Dashboard Localmente
+
+Para rodar a aplicação Streamlit e interagir com os dados em sua máquina local, siga os passos abaixo:
+
+### Pré-requisitos:
+1.  **Python 3.10+** instalado no seu sistema.
+2.  **Google Cloud SDK (gcloud)** instalado e configurado.
+3.  Acesso ao projeto GCP `vanehay` (ou ao projeto onde o BigQuery está implantado) com permissão de leitura no dataset `1IAST_Fase2`.
+
+### Passo a Passo:
+
+1.  **Clonar o Repositório**:
+    ```bash
+    git clone https://github.com/vanessahay/1IAST-TechChallenge-Fase2.git
+    cd 1IAST-TechChallenge-Fase2
+    ```
+
+2.  **Criar e Ativar um Ambiente Virtual (Recomendado)**:
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate  # No Windows use: .venv\Scripts\activate
+    ```
+
+3.  **Instalar as Dependências**:
+    ```bash
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+
+4.  **Autenticar no Google Cloud**:
+    Para que a aplicação local consiga consultar os dados no BigQuery utilizando as suas credenciais da nuvem:
+    ```bash
+    gcloud auth application-default login
+    ```
+    *Este comando abrirá o seu navegador para login no GCP. Certifique-se de usar a conta com acesso ao projeto `vanehay`.*
+
+5.  **Executar o Dashboard**:
+    Com o ambiente virtual ativo e as credenciais configuradas, execute o Streamlit:
+    ```bash
+    streamlit run dashboard/app.py
+    ```
+
+6.  **Acessar o Painel**:
+    O Streamlit iniciará um servidor web local e abrirá automaticamente o painel no seu navegador padrão (normalmente em `http://localhost:8501`). Caso não abra, utilize o link exibido no terminal.
+
