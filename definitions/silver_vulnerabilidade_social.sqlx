@@ -16,9 +16,9 @@ config {
     id_municipio: "Código IBGE padronizado de 7 dígitos preenchido com zero à esquerda",
     nome_territorio: "Nome do município padronizado em formato INITCAP",
     sigla_uf: "Sigla da Unidade da Federação em maiúsculas (ou BR para dados agregados nacionais)",
-    qtd_familias_extrema_pobreza: "Quantidade de domicílios com famílias em situação de extrema pobreza (segundo faixas do Programa Bolsa Família / CadÚnico)",
-    qtd_familias_baixa_renda: "Quantidade de domicílios com famílias de baixa renda (RFPC entre R$ 140,01 e R$ 272,00)",
-    qtd_familias_acima_meio_salario: "Quantidade de domicílios com famílias registradas com renda per capita acima de R$ 272,00 / meio salário",
+    qtd_familias_extrema_pobreza: "Média anual de domicílios com famílias em situação de extrema pobreza",
+    qtd_familias_baixa_renda: "Média anual de domicílios com famílias de baixa renda",
+    qtd_familias_acima_meio_salario: "Média anual de domicílios com famílias registradas com renda per capita acima de meio salário",
     taxa_alfabetizacao_municipal: "Enriquecimento socioeducacional: Taxa atual de alfabetização no município (oriunda de silver_alfabetizacao_municipio)"
   }
 }
@@ -26,28 +26,55 @@ config {
 /**
  * Pipeline da Camada Prata - Normalização e Enriquecimento de Vulnerabilidade Social.
  * Otimizações e limpezas aplicadas (segundo @skill:dataform-bigquery e @skill:data-autocleaning):
- *  - Normalização estrita de chaves territoriais municipais com LPAD(TRIM(codigo_ibge), 7, '0').
- *  - Tratamento da sigla_uf com COALESCE/CASE (garantindo sigla do estado e cruzamento limpo com o diretório IBGE).
- *  - Cruzamento analítico com a tabela de alfabetização municipal da Camada Prata.
+ *  - Normalização estrita de chaves territoriais municipais com LPAD(TRIM(codigo_ibge), 7, '0') via diretório oficial.
+ *  - Agregação anual (média) para resolver a granularidade mensal e garantir unicidade por (ano, id_municipio).
+ *  - Cruzamento analítico com a tabela de alfabetização municipal da Camada Prata usando chaves compostas seguras para evitar fan-out.
  */
+WITH vs_prep AS (
+  SELECT
+    SAFE_CAST(SPLIT(mes_ano, '/')[OFFSET(1)] AS INT64) AS ano,
+    SAFE.PARSE_DATE('%m/%Y', mes_ano) AS data_referencia,
+    CAST(codigo_ibge AS STRING) AS codigo_ibge_str,
+    nome_territorio,
+    sigla_uf,
+    qtd_familias_extrema_pobreza,
+    qtd_familias_baixa_renda,
+    qtd_familias_acima_meio_salario
+  FROM ${ref("bronze_vulnerabilidade_social")}
+  WHERE codigo_ibge IS NOT NULL
+),
+vs_grouped AS (
+  SELECT
+    vs.ano,
+    MAX(vs.data_referencia) AS data_referencia,
+    dir.id_municipio,
+    INITCAP(TRIM(MAX(vs.nome_territorio))) AS nome_territorio,
+    CASE
+      WHEN vs.codigo_ibge_str = '0' OR LOWER(TRIM(MAX(vs.nome_territorio))) = 'brasil' THEN 'BR'
+      WHEN NULLIF(TRIM(MAX(vs.sigla_uf)), '') IS NOT NULL THEN UPPER(TRIM(MAX(vs.sigla_uf)))
+      ELSE COALESCE(MAX(dir.sigla_uf), 'N/A')
+    END AS sigla_uf,
+    AVG(SAFE_CAST(vs.qtd_familias_extrema_pobreza AS FLOAT64)) AS qtd_familias_extrema_pobreza,
+    AVG(SAFE_CAST(vs.qtd_familias_baixa_renda AS FLOAT64)) AS qtd_familias_baixa_renda,
+    AVG(SAFE_CAST(vs.qtd_familias_acima_meio_salario AS FLOAT64)) AS qtd_familias_acima_meio_salario
+  FROM vs_prep AS vs
+  LEFT JOIN ${ref("br_bd_diretorios_brasil", "municipio")} AS dir
+    ON vs.codigo_ibge_str = dir.id_municipio_6
+  GROUP BY vs.ano, dir.id_municipio, vs.codigo_ibge_str
+)
 SELECT
-  SAFE_CAST(SPLIT(vs.mes_ano, '-')[OFFSET(0)] AS INT64) AS ano,
-  SAFE_CAST(vs.mes_ano AS DATE) AS data_referencia,
-  LPAD(TRIM(vs.codigo_ibge), 7, '0') AS id_municipio,
-  INITCAP(TRIM(vs.nome_territorio)) AS nome_territorio,
-  CASE
-    WHEN TRIM(vs.codigo_ibge) = '0' OR LOWER(TRIM(vs.nome_territorio)) = 'brasil' THEN 'BR'
-    WHEN NULLIF(TRIM(vs.sigla_uf), '') IS NOT NULL THEN UPPER(TRIM(vs.sigla_uf))
-    WHEN LENGTH(TRIM(vs.codigo_ibge)) = 7 THEN COALESCE(alf.sigla_uf, dir.sigla_uf, 'N/A')
-    ELSE 'N/A'
-  END AS sigla_uf,
-  SAFE_CAST(vs.qtd_familias_extrema_pobreza AS FLOAT64) AS qtd_familias_extrema_pobreza,
-  SAFE_CAST(vs.qtd_familias_baixa_renda AS FLOAT64) AS qtd_familias_baixa_renda,
-  SAFE_CAST(vs.qtd_familias_acima_meio_salario AS FLOAT64) AS qtd_familias_acima_meio_salario,
+  g.ano,
+  g.data_referencia,
+  g.id_municipio,
+  g.nome_territorio,
+  g.sigla_uf,
+  g.qtd_familias_extrema_pobreza,
+  g.qtd_familias_baixa_renda,
+  g.qtd_familias_acima_meio_salario,
   SAFE_CAST(alf.taxa_alfabetizacao_atual AS FLOAT64) AS taxa_alfabetizacao_municipal
-FROM ${ref("bronze_vulnerabilidade_social")} AS vs
+FROM vs_grouped AS g
 LEFT JOIN ${ref("silver_alfabetizacao_municipio")} AS alf
-  ON LPAD(TRIM(vs.codigo_ibge), 7, '0') = alf.id_municipio
-LEFT JOIN ${ref("br_bd_diretorios_brasil", "municipio")} AS dir
-  ON LPAD(TRIM(vs.codigo_ibge), 7, '0') = dir.id_municipio
-WHERE vs.codigo_ibge IS NOT NULL
+  ON g.id_municipio = alf.id_municipio
+  AND g.ano = alf.ano
+  AND alf.rede = 'Municipal'
+  AND alf.serie = '2° ano do Ensino Fundamental'
