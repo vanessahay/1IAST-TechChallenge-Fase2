@@ -28,16 +28,7 @@ O projeto conecta de ponta a ponta as origens, transformações analíticas e te
 
 *   **Sincronização no Console (`dev-workspace`)**: Concluída refletindo todos os 25 nós interligados.
 *   **Verificação de Compilação**: Grafo do pipeline compilado na nuvem com **sucesso e 0 erros**, unindo transformações analíticas e testes automáticos de governança em um único fluxo corporativo.
-
-## 5. Aplicação Web Dashboard (Streamlit)
-
-Desenvolvemos uma aplicação web interativa em Streamlit em [dashboard/app.py](file:///usr/local/google/home/vanessahay/aulao/1IAST-TechChallenge-Fase2/dashboard/app.py) que consome as tabelas da Camada Ouro e oferece:
-*   **Visão Geral (Nacional/Estadual)**: Painel executivo com taxas de alfabetização e atingimento de metas consolidadas do Brasil e estados (gráficos Plotly).
-*   **Busca Municipal**: Filtro dinâmico por estado e busca por nome, exibindo tabela com badges coloridos de status de atingimento.
-*   **Simulador de Risco (ML)**: Formulário interativo que simula o risco de defasagem de um aluno conectando diretamente com as predições em tempo real do BigQuery ML (`ML.PREDICT`).
-*   **Assistente Gemini (Chat)**: Chat integrado usando `google-cloud-geminidataanalytics` que permite consultas em linguagem natural diretamente na tabela de metas e resultados.
-
-## 6. Evolução dos Modelos de Machine Learning (V2)
+## 5. Evolução dos Modelos de Machine Learning (V2)
 
 Melhoramos o dataset de ML incorporando a média anual de famílias em situação de vulnerabilidade social do CadÚnico (`silver_vulnerabilidade_social`), corrigindo problemas de granularidade temporal e chaves territoriais (6 para 7 dígitos).
 
