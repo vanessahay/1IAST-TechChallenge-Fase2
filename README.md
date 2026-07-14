@@ -1,6 +1,6 @@
 # 🎓 1IAST - Tech Challenge Fase 2: Pipeline de Engenharia, Governança e IA (Alfabetização & Vulnerabilidade)
 
-Este repositório contém a solução completa para o **Tech Challenge Fase 2** (Grupo 1IAST), consistindo em um pipeline robusto de engenharia de dados, qualidade de dados (Governança) e treinamento de modelos de Inteligência Artificial (BigQuery ML) integrada ao ecossistema Google Cloud.
+Este repositório contém a solução completa para o **Tech Challenge Fase 2** (Grupo 1IAST), consistindo em um pipeline robusto de engenharia de dados, qualidade de dados (Governança), treinamento de modelos de Inteligência Artificial (BigQuery ML) e uma aplicação de visualização interativa (Streamlit) integrada ao ecossistema Google Cloud.
 
 ---
 
@@ -16,6 +16,7 @@ Com base nesse parâmetro, foi criado o **Indicador Criança Alfabetizada**, que
 Tradicionalmente, os indicadores de alfabetização são **retrospectivos** — mostram o problema após o término do ano letivo, inviabilizando ações corretivas a tempo. O objetivo deste projeto é construir uma solução de dados moderna que permita:
 1.  **Monitorar proativamente** o cumprimento das metas municipais, estaduais e nacionais vinculadas ao Indicador Criança Alfabetizada.
 2.  **Prever o risco de defasagem** de proficiência de um aluno antes do término do ciclo, cruzando dados educacionais com indicadores socioeconômicos de vulnerabilidade do CadÚnico.
+3.  Permitir aos gestores públicos simular cenários (através de modelos preditivos) e interagir com os dados de forma intuitiva.
 
 ---
 
@@ -50,8 +51,11 @@ graph TD
 
     subgraph Analytics & IA
         L --> N[BigQuery ML: Modelos Preditivos]
-        J --> P[BI / Dashboards Externos]
-        K --> P
+        J --> O[Streamlit Dashboard Web]
+        K --> O
+        N -->|ML.PREDICT| O
+        K -->|Gemini Data Analytics API| P[Assistente Chat Gemini]
+        O --> P
     end
 ```
 
@@ -71,6 +75,8 @@ graph TD
 | **Google Cloud Dataform** | Engenharia de Dados (ELT) | Gerenciamento de dependências nativo no BigQuery, versionamento Git, controle de ambiente e asserções de qualidade integradas. |
 | **BigQuery ML (BQML)** | Inteligência Artificial (ML) | Permite treinar modelos preditivos (XGBoost/Regressão) diretamente no DW usando SQL, eliminando custos de movimentação de dados e infraestrutura externa. |
 | **Cloud Composer (Airflow)**| Orquestração do Pipeline | Disparo automático e sequencial das tarefas de ingestão (Notebook) e materialização (Dataform). |
+| **Streamlit** | Interface Web (Dashboard) | Desenvolvimento ágil em Python, com componentes nativos para gráficos interativos (Plotly) e formulários para simulação de IA. |
+| **Gemini Data Analytics API**| IA Generativa (LLM) | Permite integração do chat assistente diretamente na base Ouro do BigQuery com separação de raciocínio (thoughts) e suporte multi-turno. |
 
 ---
 
@@ -122,7 +128,8 @@ A camada **Gold** (`gold_dataset_ml_proficiencia_alunos`) unifica os dados de pr
     *   *Recomendação*: O modelo de Regressão Logística é recomendado para ações preventivas de busca ativa por ter maior Recall, minimizando os falsos negativos.
 
 ### B. Análise de Desigualdade Educacional:
-*   A base Gold permite cruzar a taxa de alfabetização com variáveis como `qtd_familias_extrema_pobreza`, `rede` (pública vs. privada) e localização geográfica para identificar regiões que apresentam abismo educacional associado a fatores socioeconômicos, direcionando estudos de impacto.
+*   A base Gold permite cruzar a taxa de alfabetização com variáveis como `qtd_familias_extrema_pobreza`, `rede` (pública vs. privada) e localização geográfica.
+*   Gestores podem identificar visualmente no Streamlit quais regiões apresentam abismo educacional associado a fatores socioeconômicos, direcionando estudos de impacto.
 
 ### C. Políticas Públicas Baseadas em Dados (Busca Ativa):
 *   **Direcionamento de Recursos**: Municípios com alta taxa de risco predito podem receber suporte emergencial ou priorização de programas como o *Compromisso Nacional Criança Alfabetizada*.
@@ -143,7 +150,9 @@ A camada **Gold** (`gold_dataset_ml_proficiencia_alunos`) unifica os dados de pr
 ├── notebooks/                       # Notebooks Jupyter
 │   ├── ingestao_vulnerabilidade_social.ipynb # Ingestão automatizada SAGI
 │   └── treinamento_modelo_preditivo.ipynb # Treinamento de ML
-├── requirements.txt                 # Dependências do projeto (notebooks)
+├── dashboard/                       # Aplicação Web Streamlit
+│   └── app.py                       # Código-fonte do painel interativo
+├── requirements.txt                 # Dependências do projeto (dashboard/notebooks)
 ├── orchestration-pipeline.yaml      # DAG declarativa (Composer/Airflow)
 ├── deployment.yaml                  # Configurações de ambiente de implantação
 ├── workflow_settings.yaml           # Configuração de infraestrutura do Dataform
@@ -152,5 +161,47 @@ A camada **Gold** (`gold_dataset_ml_proficiencia_alunos`) unifica os dados de pr
 
 ---
 
+## 8. Como Executar o Dashboard Localmente
 
+Para rodar a aplicação Streamlit e interagir com os dados em sua máquina local, siga os passos abaixo:
 
+### Pré-requisitos:
+1.  **Python 3.10+** instalado no seu sistema.
+2.  **Google Cloud SDK (gcloud)** instalado e configurado.
+3.  Acesso ao projeto GCP `vanehay` (ou ao projeto onde o BigQuery está implantado) com permissão de leitura no dataset `1IAST_Fase2`.
+
+### Passo a Passo:
+
+1.  **Clonar o Repositório**:
+    ```bash
+    git clone https://github.com/vanessahay/1IAST-TechChallenge-Fase2.git
+    cd 1IAST-TechChallenge-Fase2
+    ```
+
+2.  **Criar e Ativar um Ambiente Virtual (Recomendado)**:
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate  # No Windows use: .venv\Scripts\activate
+    ```
+
+3.  **Instalar as Dependências**:
+    ```bash
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+
+4.  **Autenticar no Google Cloud**:
+    Para que a aplicação local consiga consultar os dados no BigQuery utilizando as suas credenciais da nuvem:
+    ```bash
+    gcloud auth application-default login
+    ```
+    *Este comando abrirá o seu navegador para login no GCP. Certifique-se de usar a conta com acesso ao projeto `vanehay`.*
+
+5.  **Executar o Dashboard**:
+    Com o ambiente virtual ativo e as credenciais configuradas, execute o Streamlit:
+    ```bash
+    streamlit run dashboard/app.py
+    ```
+
+6.  **Acessar o Painel**:
+    O Streamlit iniciará um servidor web local e abrirá automaticamente o painel no seu navegador padrão (normalmente em `http://localhost:8501`). Caso não abra, utilize o link exibido no terminal.
